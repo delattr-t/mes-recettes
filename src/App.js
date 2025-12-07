@@ -15,7 +15,7 @@ export default function RecipeManager() {
   const [newRecipe, setNewRecipe] = useState({
     name: '',
     servings: '',
-    type: '',
+    types: [],
     ingredients: '',
     steps: '',
     image: ''
@@ -82,7 +82,7 @@ export default function RecipeManager() {
       id: editingRecipe?.id || Date.now().toString(),
       name: newRecipe.name,
       servings: newRecipe.servings,
-      type: newRecipe.type,
+      types: newRecipe.types,
       ingredients: newRecipe.ingredients.split('\n').filter(i => i.trim()),
       steps: newRecipe.steps,
       image: newRecipe.image,
@@ -133,7 +133,7 @@ export default function RecipeManager() {
     setNewRecipe({
       name: recipe.name,
       servings: recipe.servings || '',
-      type: recipe.type || '',
+      types: recipe.types || [],
       ingredients: recipe.ingredients.join('\n'),
       steps: recipe.steps,
       image: recipe.image || ''
@@ -142,9 +142,17 @@ export default function RecipeManager() {
   };
 
   const resetForm = () => {
-    setNewRecipe({ name: '', servings: '', type: '', ingredients: '', steps: '', image: '' });
+    setNewRecipe({ name: '', servings: '', types: [], ingredients: '', steps: '', image: '' });
     setEditingRecipe(null);
     setActiveTab('ingredients');
+  };
+
+  const toggleType = (type) => {
+    if (newRecipe.types.includes(type)) {
+      setNewRecipe({ ...newRecipe, types: newRecipe.types.filter(t => t !== type) });
+    } else {
+      setNewRecipe({ ...newRecipe, types: [...newRecipe.types, type] });
+    }
   };
 
   const filteredRecipes = recipes.filter(recipe => {
@@ -310,11 +318,13 @@ export default function RecipeManager() {
                         </p>
                       )}
 
-                      {recipe.type && (
-                        <div className="mb-3">
-                          <span className="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-700">
-                            {recipe.type}
-                          </span>
+                      {recipe.types && recipe.types.length > 0 && (
+                        <div className="mb-3 flex flex-wrap gap-2">
+                          {recipe.types.map((type, idx) => (
+                            <span key={idx} className="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-700">
+                              {type}
+                            </span>
+                          ))}
                         </div>
                       )}
                       
@@ -417,20 +427,34 @@ export default function RecipeManager() {
 
           <div className="mb-6">
             <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Type de plat
+              Types de plat (sélection multiple)
             </label>
-            <select
-              value={newRecipe.type}
-              onChange={(e) => setNewRecipe({ ...newRecipe, type: e.target.value })}
-              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-orange-500 focus:outline-none bg-white"
-            >
-              <option value="">-- Sélectionnez un type --</option>
-              <option value="Entrée">Entrée</option>
-              <option value="Plat">Plat</option>
-              <option value="Dessert">Dessert</option>
-              <option value="Petit-déjeuner">Petit-déjeuner</option>
-              <option value="Goûter">Goûter</option>
-            </select>
+            <div className="grid grid-cols-2 gap-3">
+              {['Entrée', 'Plat', 'Dessert', 'Petit-déjeuner', 'Goûter'].map((type) => (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => toggleType(type)}
+                  className={`px-4 py-3 rounded-xl border-2 font-semibold transition-all ${
+                    newRecipe.types.includes(type)
+                      ? 'bg-purple-600 text-white border-purple-600'
+                      : 'bg-white text-gray-700 border-gray-200 hover:border-purple-300'
+                  }`}
+                >
+                  {type}
+                </button>
+              ))}
+            </div>
+            {newRecipe.types.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                <span className="text-sm text-gray-600">Sélectionné :</span>
+                {newRecipe.types.map((type, idx) => (
+                  <span key={idx} className="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-700">
+                    {type}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="mb-6">
