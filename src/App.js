@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, ChefHat, Trash2, Edit2 } from 'lucide-react';
+import { Plus, Search, ChefHat, Trash2, Edit2, Cloud, CloudOff } from 'lucide-react';
+import { database } from './firebaseConfig';
+import { ref, set, onValue, remove } from 'firebase/database';
 
 export default function RecipeManager() {
   const [recipes, setRecipes] = useState([]);
   const [currentView, setCurrentView] = useState('home');
   const [editingRecipe, setEditingRecipe] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [syncStatus, setSyncStatus] = useState('connecting');
   
   const [newRecipe, setNewRecipe] = useState({
     name: '',
@@ -17,29 +20,28 @@ export default function RecipeManager() {
   const [activeTab, setActiveTab] = useState('ingredients');
 
   useEffect(() => {
-    loadRecipes();
+    // Écouter les changements en temps réel
+    const recipesRef = ref(database, 'recipes');
+    
+    const unsubscribe = onValue(recipesRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        const recipesArray = Object.values(data);
+        setRecipes(recipesArray);
+        setSyncStatus('synced');
+      } else {
+        setRecipes([]);
+        setSyncStatus('synced');
+      }
+    }, (error) => {
+      console.error('Erreur Firebase:', error);
+      setSyncStatus('error');
+    });
+
+    return () => unsubscribe();
   }, []);
 
-  const loadRecipes = () => {
-    try {
-      const stored = localStorage.getItem('recipes');
-      if (stored) {
-        setRecipes(JSON.parse(stored));
-      }
-    } catch (error) {
-      console.error('Erreur lors du chargement des recettes:', error);
-    }
-  };
-
-  const saveToLocalStorage = (recipesData) => {
-    try {
-      localStorage.setItem('recipes', JSON.stringify(recipesData));
-    } catch (error) {
-      console.error('Erreur sauvegarde locale:', error);
-    }
-  };
-
-  const saveRecipe = () => {
+  const saveRecipe = async () => {
     if (!newRecipe.name.trim()) {
       alert('Veuillez entrer un nom pour la recette');
       return;
@@ -56,29 +58,30 @@ export default function RecipeManager() {
     };
 
     try {
-      const updatedRecipes = editingRecipe
-        ? recipes.map(r => r.id === recipe.id ? recipe : r)
-        : [...recipes, recipe];
-      
-      setRecipes(updatedRecipes);
-      saveToLocalStorage(updatedRecipes);
+      setSyncStatus('syncing');
+      const recipeRef = ref(database, `recipes/${recipe.id}`);
+      await set(recipeRef, recipe);
+      setSyncStatus('synced');
       resetForm();
       setCurrentView('home');
     } catch (error) {
       console.error('Erreur lors de la sauvegarde:', error);
       alert('Erreur lors de la sauvegarde de la recette');
+      setSyncStatus('error');
     }
   };
 
-  const deleteRecipe = (id) => {
+  const deleteRecipe = async (id) => {
     if (!window.confirm('Êtes-vous sûr de vouloir supprimer cette recette ?')) return;
 
     try {
-      const updatedRecipes = recipes.filter(r => r.id !== id);
-      setRecipes(updatedRecipes);
-      saveToLocalStorage(updatedRecipes);
+      setSyncStatus('syncing');
+      const recipeRef = ref(database, `recipes/${id}`);
+      await remove(recipeRef);
+      setSyncStatus('synced');
     } catch (error) {
       console.error('Erreur lors de la suppression:', error);
+      setSyncStatus('error');
     }
   };
 
@@ -110,6 +113,25 @@ export default function RecipeManager() {
     return matchesName || matchesIngredients;
   });
 
+  const SyncIndicator = () => {
+    const statusConfig = {
+      'connecting': { icon: Cloud, color: 'text-gray-400', text: 'Connexion...' },
+      'syncing': { icon: Cloud, color: 'text-blue-500', text: 'Synchronisation...' },
+      'synced': { icon: Cloud, color: 'text-green-500', text: 'Synchronisé ✓' },
+      'error': { icon: CloudOff, color: 'text-red-500', text: 'Erreur de connexion' }
+    };
+
+    const config = statusConfig[syncStatus] || statusConfig.connecting;
+    const Icon = config.icon;
+
+    return (
+      <div className={`flex items-center gap-2 ${config.color} text-sm`}>
+        <Icon className="w-4 h-4" />
+        <span>{config.text}</span>
+      </div>
+    );
+  };
+
   if (currentView === 'home') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-orange-50 to-red-50">
@@ -118,7 +140,10 @@ export default function RecipeManager() {
             <div className="flex items-center justify-between mb-8">
               <div className="flex items-center gap-3">
                 <ChefHat className="w-10 h-10 text-orange-600" />
-                <h1 className="text-4xl font-bold text-gray-800">Mes Recettes</h1>
+                <div>
+                  <h1 className="text-4xl font-bold text-gray-800">Mes Recettes</h1>
+                  <SyncIndicator />
+                </div>
               </div>
               <button
                 onClick={() => setCurrentView('add')}
