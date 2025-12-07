@@ -15,8 +15,8 @@ export default function RecipeManager() {
   const [newRecipe, setNewRecipe] = useState({
     name: '',
     servings: '',
+    type: '',
     ingredients: '',
-    description: '',
     steps: '',
     image: ''
   });
@@ -82,8 +82,8 @@ export default function RecipeManager() {
       id: editingRecipe?.id || Date.now().toString(),
       name: newRecipe.name,
       servings: newRecipe.servings,
+      type: newRecipe.type,
       ingredients: newRecipe.ingredients.split('\n').filter(i => i.trim()),
-      description: newRecipe.description,
       steps: newRecipe.steps,
       image: newRecipe.image,
       createdAt: editingRecipe?.createdAt || new Date().toISOString(),
@@ -133,8 +133,8 @@ export default function RecipeManager() {
     setNewRecipe({
       name: recipe.name,
       servings: recipe.servings || '',
+      type: recipe.type || '',
       ingredients: recipe.ingredients.join('\n'),
-      description: recipe.description,
       steps: recipe.steps,
       image: recipe.image || ''
     });
@@ -142,7 +142,7 @@ export default function RecipeManager() {
   };
 
   const resetForm = () => {
-    setNewRecipe({ name: '', servings: '', ingredients: '', description: '', steps: '', image: '' });
+    setNewRecipe({ name: '', servings: '', type: '', ingredients: '', steps: '', image: '' });
     setEditingRecipe(null);
     setActiveTab('ingredients');
   };
@@ -309,6 +309,14 @@ export default function RecipeManager() {
                           👥 Pour {recipe.servings} personne{recipe.servings > 1 ? 's' : ''}
                         </p>
                       )}
+
+                      {recipe.type && (
+                        <div className="mb-3">
+                          <span className="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-700">
+                            {recipe.type}
+                          </span>
+                        </div>
+                      )}
                       
                       {recipe.ingredients && recipe.ingredients.length > 0 && (
                         <div className="mb-3">
@@ -409,15 +417,20 @@ export default function RecipeManager() {
 
           <div className="mb-6">
             <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Description
+              Type de plat
             </label>
-            <textarea
-              value={newRecipe.description}
-              onChange={(e) => setNewRecipe({ ...newRecipe, description: e.target.value })}
-              placeholder="Décrivez brièvement votre recette..."
-              rows="3"
-              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-orange-500 focus:outline-none resize-none"
-            />
+            <select
+              value={newRecipe.type}
+              onChange={(e) => setNewRecipe({ ...newRecipe, type: e.target.value })}
+              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-orange-500 focus:outline-none bg-white"
+            >
+              <option value="">-- Sélectionnez un type --</option>
+              <option value="Entrée">Entrée</option>
+              <option value="Plat">Plat</option>
+              <option value="Dessert">Dessert</option>
+              <option value="Petit-déjeuner">Petit-déjeuner</option>
+              <option value="Goûter">Goûter</option>
+            </select>
           </div>
 
           <div className="mb-6">
