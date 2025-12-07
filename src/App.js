@@ -303,21 +303,23 @@ export default function RecipeManager() {
                         )}
                       </div>
                       
-                      <div className="mb-3">
-                        <p className="text-sm font-semibold text-orange-700 mb-2">Ingrédients:</p>
-                        <div className="flex flex-wrap gap-2">
-                          {recipe.ingredients.slice(0, 3).map((ing, idx) => (
-                            <span key={idx} className="text-xs bg-orange-50 px-3 py-1 rounded-full text-gray-700">
-                              {ing}
-                            </span>
-                          ))}
-                          {recipe.ingredients.length > 3 && (
-                            <span className="text-xs bg-orange-50 px-3 py-1 rounded-full text-gray-500">
-                              +{recipe.ingredients.length - 3}
-                            </span>
-                          )}
+                      {recipe.ingredients && recipe.ingredients.length > 0 && (
+                        <div className="mb-3">
+                          <p className="text-sm font-semibold text-orange-700 mb-2">Ingrédients:</p>
+                          <div className="flex flex-wrap gap-2">
+                            {recipe.ingredients.slice(0, 3).map((ing, idx) => (
+                              <span key={idx} className="text-xs bg-orange-50 px-3 py-1 rounded-full text-gray-700">
+                                {ing}
+                              </span>
+                            ))}
+                            {recipe.ingredients.length > 3 && (
+                              <span className="text-xs bg-orange-50 px-3 py-1 rounded-full text-gray-500">
+                                +{recipe.ingredients.length - 3}
+                              </span>
+                            )}
+                          </div>
                         </div>
-                      </div>
+                      )}
                       
                       {recipe.description && (
                         <p className="text-sm text-gray-600 line-clamp-3">
