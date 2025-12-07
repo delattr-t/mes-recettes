@@ -8,6 +8,7 @@ export default function RecipeManager() {
   const [recipes, setRecipes] = useState([]);
   const [currentView, setCurrentView] = useState('home');
   const [editingRecipe, setEditingRecipe] = useState(null);
+  const [viewingRecipe, setViewingRecipe] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [syncStatus, setSyncStatus] = useState('connecting');
   const [user, setUser] = useState(null);
@@ -138,7 +139,13 @@ export default function RecipeManager() {
       steps: recipe.steps,
       image: recipe.image || ''
     });
+    setViewingRecipe(null);
     setCurrentView('add');
+  };
+
+  const viewRecipe = (recipe) => {
+    setViewingRecipe(recipe);
+    setCurrentView('view');
   };
 
   const resetForm = () => {
@@ -362,6 +369,128 @@ export default function RecipeManager() {
                 ))}
               </div>
             )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Vue détaillée d'une recette
+  if (currentView === 'view' && viewingRecipe) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-orange-50 to-red-50">
+        <div className="max-w-4xl mx-auto p-6">
+          <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
+            {viewingRecipe.image && (
+              <div className="h-96 overflow-hidden bg-gray-100">
+                <img 
+                  src={viewingRecipe.image} 
+                  alt={viewingRecipe.name}
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                  }}
+                />
+              </div>
+            )}
+            
+            <div className="p-8">
+              <div className="flex items-center justify-between mb-6">
+                <h1 className="text-4xl font-bold text-gray-800">{viewingRecipe.name}</h1>
+                <button
+                  onClick={() => {
+                    setViewingRecipe(null);
+                    setCurrentView('home');
+                  }}
+                  className="text-gray-600 hover:text-gray-800 px-4 py-2 rounded-lg hover:bg-gray-100"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="flex flex-wrap gap-3 mb-6">
+                {viewingRecipe.servings && (
+                  <div className="flex items-center gap-2 bg-blue-50 px-4 py-2 rounded-xl">
+                    <span className="text-blue-700 font-semibold">👥 {viewingRecipe.servings} personne{viewingRecipe.servings > 1 ? 's' : ''}</span>
+                  </div>
+                )}
+                {viewingRecipe.types && viewingRecipe.types.length > 0 && viewingRecipe.types.map((type, idx) => (
+                  <span key={idx} className="inline-block px-4 py-2 rounded-xl text-sm font-semibold bg-purple-100 text-purple-700">
+                    {type}
+                  </span>
+                ))}
+              </div>
+
+              {viewingRecipe.ingredients && viewingRecipe.ingredients.length > 0 && (
+                <div className="mb-8">
+                  <h2 className="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                    🥘 Ingrédients
+                  </h2>
+                  <div className="bg-orange-50 rounded-xl p-6">
+                    <ul className="space-y-2">
+                      {viewingRecipe.ingredients.map((ing, idx) => (
+                        <li key={idx} className="flex items-start gap-3">
+                          <span className="text-orange-600 font-bold">•</span>
+                          <span className="text-gray-700">{ing}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              )}
+
+              {viewingRecipe.steps && (
+                <div className="mb-8">
+                  <h2 className="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                    👨‍🍳 Préparation
+                  </h2>
+                  <div className="bg-gray-50 rounded-xl p-6">
+                    <p className="text-gray-700 whitespace-pre-line leading-relaxed">{viewingRecipe.steps}</p>
+                  </div>
+                </div>
+              )}
+
+              {viewingRecipe.createdBy && (
+                <p className="text-sm text-gray-500 mb-6">
+                  Créée par {viewingRecipe.createdBy}
+                </p>
+              )}
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setViewingRecipe(null);
+                    setCurrentView('home');
+                  }}
+                  className="flex-1 px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-colors font-semibold"
+                >
+                  Retour
+                </button>
+                {user && (
+                  <>
+                    <button
+                      onClick={() => editRecipe(viewingRecipe)}
+                      className="flex-1 flex items-center justify-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700 transition-colors shadow-lg font-semibold"
+                    >
+                      <Edit2 className="w-5 h-5" />
+                      Modifier
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (window.confirm('Êtes-vous sûr de vouloir supprimer cette recette ?')) {
+                          deleteRecipe(viewingRecipe.id);
+                          setViewingRecipe(null);
+                          setCurrentView('home');
+                        }
+                      }}
+                      className="px-6 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors shadow-lg font-semibold"
+                    >
+                      <Trash2 className="w-5 h-5" />
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       </div>
