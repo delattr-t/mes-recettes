@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, ChefHat, Trash2, Edit2, Cloud, CloudOff } from 'lucide-react';
-import { database } from './firebaseConfig';
+import { Plus, Search, ChefHat, Trash2, Edit2, Cloud, CloudOff, LogOut, LogIn } from 'lucide-react';
+import { database, auth, googleProvider } from './firebaseConfig';
 import { ref, set, onValue, remove } from 'firebase/database';
+import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
 
 export default function RecipeManager() {
   const [recipes, setRecipes] = useState([]);
@@ -9,6 +10,7 @@ export default function RecipeManager() {
   const [editingRecipe, setEditingRecipe] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [syncStatus, setSyncStatus] = useState('connecting');
+  const [user, setUser] = useState(null);
   
   const [newRecipe, setNewRecipe] = useState({
     name: '',
@@ -20,10 +22,15 @@ export default function RecipeManager() {
   const [activeTab, setActiveTab] = useState('ingredients');
 
   useEffect(() => {
+    // Écouter l'état d'authentification
+    const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+    });
+
     // Écouter les changements en temps réel
     const recipesRef = ref(database, 'recipes');
     
-    const unsubscribe = onValue(recipesRef, (snapshot) => {
+    const unsubscribeData = onValue(recipesRef, (snapshot) => {
       const data = snapshot.val();
       if (data) {
         const recipesArray = Object.values(data);
@@ -38,10 +45,35 @@ export default function RecipeManager() {
       setSyncStatus('error');
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribeAuth();
+      unsubscribeData();
+    };
   }, []);
 
+  const handleLogin = async () => {
+    try {
+      await signInWithPopup(auth, googleProvider);
+    } catch (error) {
+      console.error('Erreur de connexion:', error);
+      alert('Erreur lors de la connexion');
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+    } catch (error) {
+      console.error('Erreur de déconnexion:', error);
+    }
+  };
+
   const saveRecipe = async () => {
+    if (!user) {
+      alert('Veuillez vous connecter pour ajouter une recette');
+      return;
+    }
+
     if (!newRecipe.name.trim()) {
       alert('Veuillez entrer un nom pour la recette');
       return;
@@ -54,7 +86,8 @@ export default function RecipeManager() {
       description: newRecipe.description,
       steps: newRecipe.steps,
       image: newRecipe.image,
-      createdAt: editingRecipe?.createdAt || new Date().toISOString()
+      createdAt: editingRecipe?.createdAt || new Date().toISOString(),
+      createdBy: user.email
     };
 
     try {
@@ -66,12 +99,17 @@ export default function RecipeManager() {
       setCurrentView('home');
     } catch (error) {
       console.error('Erreur lors de la sauvegarde:', error);
-      alert('Erreur lors de la sauvegarde de la recette');
+      alert('Erreur lors de la sauvegarde de la recette. Vérifiez que vous êtes connecté.');
       setSyncStatus('error');
     }
   };
 
   const deleteRecipe = async (id) => {
+    if (!user) {
+      alert('Veuillez vous connecter pour supprimer une recette');
+      return;
+    }
+
     if (!window.confirm('Êtes-vous sûr de vouloir supprimer cette recette ?')) return;
 
     try {
@@ -81,11 +119,16 @@ export default function RecipeManager() {
       setSyncStatus('synced');
     } catch (error) {
       console.error('Erreur lors de la suppression:', error);
+      alert('Erreur lors de la suppression. Vérifiez que vous êtes connecté.');
       setSyncStatus('error');
     }
   };
 
   const editRecipe = (recipe) => {
+    if (!user) {
+      alert('Veuillez vous connecter pour modifier une recette');
+      return;
+    }
     setEditingRecipe(recipe);
     setNewRecipe({
       name: recipe.name,
@@ -145,14 +188,55 @@ export default function RecipeManager() {
                   <SyncIndicator />
                 </div>
               </div>
-              <button
-                onClick={() => setCurrentView('add')}
-                className="flex items-center gap-2 bg-orange-600 text-white px-6 py-3 rounded-xl hover:bg-orange-700 transition-colors shadow-lg"
-              >
-                <Plus className="w-5 h-5" />
-                Nouvelle Recette
-              </button>
+              
+              <div className="flex items-center gap-4">
+                {user ? (
+                  <>
+                    <div className="text-right">
+                      <p className="text-sm text-gray-600">Connecté en tant que</p>
+                      <p className="text-sm font-semibold text-gray-800">{user.email}</p>
+                    </div>
+                    <button
+                      onClick={handleLogout}
+                      className="flex items-center gap-2 bg-gray-600 text-white px-4 py-2 rounded-xl hover:bg-gray-700 transition-colors"
+                      title="Se déconnecter"
+                    >
+                      <LogOut className="w-4 h-4" />
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={handleLogin}
+                    className="flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700 transition-colors shadow-lg"
+                  >
+                    <LogIn className="w-5 h-5" />
+                    Se connecter
+                  </button>
+                )}
+                
+                <button
+                  onClick={() => {
+                    if (!user) {
+                      alert('Veuillez vous connecter pour ajouter une recette');
+                      return;
+                    }
+                    setCurrentView('add');
+                  }}
+                  className="flex items-center gap-2 bg-orange-600 text-white px-6 py-3 rounded-xl hover:bg-orange-700 transition-colors shadow-lg"
+                >
+                  <Plus className="w-5 h-5" />
+                  Nouvelle Recette
+                </button>
+              </div>
             </div>
+
+            {!user && (
+              <div className="mb-6 bg-blue-50 border-2 border-blue-200 rounded-xl p-4">
+                <p className="text-blue-800 text-sm">
+                  ℹ️ Vous pouvez consulter les recettes, mais vous devez vous connecter pour en ajouter, modifier ou supprimer.
+                </p>
+              </div>
+            )}
 
             <div className="mb-6">
               <div className="relative">
@@ -193,22 +277,24 @@ export default function RecipeManager() {
                     <div className="p-6">
                       <div className="flex justify-between items-start mb-3">
                         <h3 className="text-xl font-bold text-gray-800 flex-1">{recipe.name}</h3>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => editRecipe(recipe)}
-                            className="text-blue-600 hover:text-blue-700 p-2"
-                            title="Modifier"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => deleteRecipe(recipe.id)}
-                            className="text-red-600 hover:text-red-700 p-2"
-                            title="Supprimer"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
+                        {user && (
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => editRecipe(recipe)}
+                              className="text-blue-600 hover:text-blue-700 p-2"
+                              title="Modifier"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => deleteRecipe(recipe.id)}
+                              className="text-red-600 hover:text-red-700 p-2"
+                              title="Supprimer"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        )}
                       </div>
                       
                       <div className="mb-3">
@@ -230,6 +316,12 @@ export default function RecipeManager() {
                       {recipe.description && (
                         <p className="text-sm text-gray-600 line-clamp-3">
                           {recipe.description}
+                        </p>
+                      )}
+                      
+                      {recipe.createdBy && (
+                        <p className="text-xs text-gray-400 mt-3">
+                          Par {recipe.createdBy}
                         </p>
                       )}
                     </div>
