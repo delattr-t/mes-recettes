@@ -14,6 +14,7 @@ export default function RecipeManager() {
   
   const [newRecipe, setNewRecipe] = useState({
     name: '',
+    servings: '',
     ingredients: '',
     description: '',
     steps: '',
@@ -22,12 +23,10 @@ export default function RecipeManager() {
   const [activeTab, setActiveTab] = useState('ingredients');
 
   useEffect(() => {
-    // Écouter l'état d'authentification
     const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
     });
 
-    // Écouter les changements en temps réel
     const recipesRef = ref(database, 'recipes');
     
     const unsubscribeData = onValue(recipesRef, (snapshot) => {
@@ -82,6 +81,7 @@ export default function RecipeManager() {
     const recipe = {
       id: editingRecipe?.id || Date.now().toString(),
       name: newRecipe.name,
+      servings: newRecipe.servings,
       ingredients: newRecipe.ingredients.split('\n').filter(i => i.trim()),
       description: newRecipe.description,
       steps: newRecipe.steps,
@@ -132,6 +132,7 @@ export default function RecipeManager() {
     setEditingRecipe(recipe);
     setNewRecipe({
       name: recipe.name,
+      servings: recipe.servings || '',
       ingredients: recipe.ingredients.join('\n'),
       description: recipe.description,
       steps: recipe.steps,
@@ -141,7 +142,7 @@ export default function RecipeManager() {
   };
 
   const resetForm = () => {
-    setNewRecipe({ name: '', ingredients: '', description: '', steps: '', image: '' });
+    setNewRecipe({ name: '', servings: '', ingredients: '', description: '', steps: '', image: '' });
     setEditingRecipe(null);
     setActiveTab('ingredients');
   };
@@ -150,7 +151,7 @@ export default function RecipeManager() {
     if (!searchQuery.trim()) return true;
     const query = searchQuery.toLowerCase();
     const matchesName = recipe.name.toLowerCase().includes(query);
-    const matchesIngredients = recipe.ingredients.some(ing => 
+    const matchesIngredients = recipe.ingredients && recipe.ingredients.some(ing => 
       ing.toLowerCase().includes(query)
     );
     return matchesName || matchesIngredients;
@@ -303,6 +304,12 @@ export default function RecipeManager() {
                         )}
                       </div>
                       
+                      {recipe.servings && (
+                        <p className="text-xs text-gray-500 mb-2">
+                          👥 Pour {recipe.servings} personne{recipe.servings > 1 ? 's' : ''}
+                        </p>
+                      )}
+                      
                       {recipe.ingredients && recipe.ingredients.length > 0 && (
                         <div className="mb-3">
                           <p className="text-sm font-semibold text-orange-700 mb-2">Ingrédients:</p>
@@ -400,73 +407,58 @@ export default function RecipeManager() {
             )}
           </div>
 
-          <div className="border-b border-gray-200 mb-6">
-            <div className="flex gap-4">
-              <button
-                onClick={() => setActiveTab('ingredients')}
-                className={`pb-3 px-4 font-semibold transition-colors ${
-                  activeTab === 'ingredients'
-                    ? 'border-b-2 border-orange-600 text-orange-600'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                Ingrédients
-              </button>
-              <button
-                onClick={() => setActiveTab('preparation')}
-                className={`pb-3 px-4 font-semibold transition-colors ${
-                  activeTab === 'preparation'
-                    ? 'border-b-2 border-orange-600 text-orange-600'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                Préparation
-              </button>
-            </div>
+          <div className="mb-6">
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              Description
+            </label>
+            <textarea
+              value={newRecipe.description}
+              onChange={(e) => setNewRecipe({ ...newRecipe, description: e.target.value })}
+              placeholder="Décrivez brièvement votre recette..."
+              rows="3"
+              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-orange-500 focus:outline-none resize-none"
+            />
           </div>
 
-          {activeTab === 'ingredients' ? (
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Liste des ingrédients (un par ligne)
-              </label>
-              <textarea
-                value={newRecipe.ingredients}
-                onChange={(e) => setNewRecipe({ ...newRecipe, ingredients: e.target.value })}
-                placeholder="Ex:&#10;200g de farine&#10;3 œufs&#10;100ml de lait"
-                rows="12"
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-orange-500 focus:outline-none resize-none"
-              />
-            </div>
-          ) : (
-            <div className="space-y-6">
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Description
-                </label>
-                <textarea
-                  value={newRecipe.description}
-                  onChange={(e) => setNewRecipe({ ...newRecipe, description: e.target.value })}
-                  placeholder="Décrivez brièvement votre recette..."
-                  rows="4"
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-orange-500 focus:outline-none resize-none"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Étapes de préparation
-                </label>
-                <textarea
-                  value={newRecipe.steps}
-                  onChange={(e) => setNewRecipe({ ...newRecipe, steps: e.target.value })}
-                  placeholder="Décrivez les étapes de préparation...&#10;&#10;1. Préchauffer le four à 180°C&#10;2. Mélanger les ingrédients secs..."
-                  rows="12"
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-orange-500 focus:outline-none resize-none"
-                />
-              </div>
-            </div>
-          )}
+          <div className="mb-6">
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              Nombre de personnes
+            </label>
+            <input
+              type="number"
+              min="1"
+              value={newRecipe.servings}
+              onChange={(e) => setNewRecipe({ ...newRecipe, servings: e.target.value })}
+              placeholder="Ex: 4"
+              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-orange-500 focus:outline-none"
+            />
+          </div>
+
+          <div className="mb-6">
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              Liste des ingrédients (un par ligne)
+            </label>
+            <textarea
+              value={newRecipe.ingredients}
+              onChange={(e) => setNewRecipe({ ...newRecipe, ingredients: e.target.value })}
+              placeholder="Ex:&#10;200g de farine&#10;3 œufs&#10;100ml de lait"
+              rows="10"
+              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-orange-500 focus:outline-none resize-none"
+            />
+          </div>
+
+          <div className="mb-6">
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              Étapes de préparation
+            </label>
+            <textarea
+              value={newRecipe.steps}
+              onChange={(e) => setNewRecipe({ ...newRecipe, steps: e.target.value })}
+              placeholder="Décrivez les étapes de préparation...&#10;&#10;1. Préchauffer le four à 180°C&#10;2. Mélanger les ingrédients secs..."
+              rows="10"
+              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-orange-500 focus:outline-none resize-none"
+            />
+          </div>
 
           <div className="mt-8 flex gap-4">
             <button
