@@ -180,8 +180,8 @@ export default function RecipeManager() {
       <div className="min-h-screen bg-gradient-to-br from-orange-50 to-red-50">
         <div className="max-w-6xl mx-auto p-6">
           <div className="bg-white rounded-2xl shadow-xl p-8">
-            <div className="flex items-center justify-between mb-8">
-              <div className="flex items-center gap-3">
+            <div className="mb-8">
+              <div className="flex items-center gap-3 mb-4">
                 <ChefHat className="w-10 h-10 text-orange-600" />
                 <div>
                   <h1 className="text-4xl font-bold text-gray-800">Mes Recettes</h1>
@@ -189,44 +189,50 @@ export default function RecipeManager() {
                 </div>
               </div>
               
-              <div className="flex items-center gap-4">
+              <div className="flex flex-col gap-3">
                 {user ? (
                   <>
-                    <div className="text-right">
+                    <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
                       <p className="text-sm text-gray-600">Connecté en tant que</p>
                       <p className="text-sm font-semibold text-gray-800">{user.email}</p>
                     </div>
-                    <button
-                      onClick={handleLogout}
-                      className="flex items-center gap-2 bg-gray-600 text-white px-4 py-2 rounded-xl hover:bg-gray-700 transition-colors"
-                      title="Se déconnecter"
-                    >
-                      <LogOut className="w-4 h-4" />
-                    </button>
+                    <div className="flex gap-3">
+                      <button
+                        onClick={handleLogout}
+                        className="flex-1 flex items-center justify-center gap-2 bg-gray-600 text-white px-6 py-3 rounded-xl hover:bg-gray-700 transition-colors shadow-lg"
+                      >
+                        <LogOut className="w-5 h-5" />
+                        Se déconnecter
+                      </button>
+                      <button
+                        onClick={() => setCurrentView('add')}
+                        className="flex-1 flex items-center justify-center gap-2 bg-orange-600 text-white px-6 py-3 rounded-xl hover:bg-orange-700 transition-colors shadow-lg"
+                      >
+                        <Plus className="w-5 h-5" />
+                        Nouvelle Recette
+                      </button>
+                    </div>
                   </>
                 ) : (
-                  <button
-                    onClick={handleLogin}
-                    className="flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700 transition-colors shadow-lg"
-                  >
-                    <LogIn className="w-5 h-5" />
-                    Se connecter
-                  </button>
+                  <>
+                    <button
+                      onClick={handleLogin}
+                      className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700 transition-colors shadow-lg"
+                    >
+                      <LogIn className="w-5 h-5" />
+                      Se connecter
+                    </button>
+                    <button
+                      onClick={() => {
+                        alert('Veuillez vous connecter pour ajouter une recette');
+                      }}
+                      className="w-full flex items-center justify-center gap-2 bg-orange-600 text-white px-6 py-3 rounded-xl hover:bg-orange-700 transition-colors shadow-lg"
+                    >
+                      <Plus className="w-5 h-5" />
+                      Nouvelle Recette
+                    </button>
+                  </>
                 )}
-                
-                <button
-                  onClick={() => {
-                    if (!user) {
-                      alert('Veuillez vous connecter pour ajouter une recette');
-                      return;
-                    }
-                    setCurrentView('add');
-                  }}
-                  className="flex items-center gap-2 bg-orange-600 text-white px-6 py-3 rounded-xl hover:bg-orange-700 transition-colors shadow-lg"
-                >
-                  <Plus className="w-5 h-5" />
-                  Nouvelle Recette
-                </button>
               </div>
             </div>
 
