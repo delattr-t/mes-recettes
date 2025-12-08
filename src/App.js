@@ -430,18 +430,18 @@ export default function RecipeManager() {
                 </p>
               )}
 
-              <div className="flex gap-3">
+              <div className="flex flex-col gap-3">
                 <button
                   onClick={() => {
                     setViewingRecipe(null);
                     setCurrentView('home');
                   }}
-                  className="flex-1 px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-colors font-semibold"
+                  className="w-full px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-colors font-semibold"
                 >
-                  Retour
+                  ← Retour
                 </button>
                 {user && (
-                  <>
+                  <div className="flex gap-3">
                     <button
                       onClick={() => editRecipe(viewingRecipe)}
                       className="flex-1 flex items-center justify-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700 transition-colors shadow-lg font-semibold"
@@ -457,11 +457,12 @@ export default function RecipeManager() {
                           setCurrentView('home');
                         }
                       }}
-                      className="px-6 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors shadow-lg font-semibold"
+                      className="flex items-center justify-center gap-2 bg-red-600 text-white px-6 py-3 rounded-xl hover:bg-red-700 transition-colors shadow-lg font-semibold"
                     >
                       <Trash2 className="w-5 h-5" />
+                      Supprimer
                     </button>
-                  </>
+                  </div>
                 )}
               </div>
             </div>
