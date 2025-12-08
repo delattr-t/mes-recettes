@@ -215,50 +215,39 @@ export default function RecipeManager() {
               
               <div className="flex flex-col gap-3 max-w-md mx-auto">
                 {user ? (
-                  <>
-                    <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-center">
-                      <p className="text-sm text-gray-600">Connecté en tant que</p>
-                      <p className="text-sm font-semibold text-gray-800">{user.email}</p>
-                    </div>
-                    <div className="flex gap-3">
-                      <button
-                        onClick={handleLogout}
-                        className="flex-1 flex items-center justify-center gap-2 bg-gray-600 text-white px-6 py-3 rounded-xl hover:bg-gray-700 transition-colors shadow-lg"
-                      >
-                        <LogOut className="w-5 h-5" />
-                        Se déconnecter
-                      </button>
-                      <button
-                        onClick={() => setCurrentView('add')}
-                        className="flex-1 flex items-center justify-center gap-2 bg-orange-600 text-white px-6 py-3 rounded-xl hover:bg-orange-700 transition-colors shadow-lg"
-                      >
-                        <Plus className="w-5 h-5" />
-                        Nouvelle Recette
-                      </button>
-                    </div>
-                  </>
+                  <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-center">
+                    <p className="text-sm text-gray-600">Connecté en tant que</p>
+                    <p className="text-sm font-semibold text-gray-800">{user.email}</p>
+                    <button
+                      onClick={handleLogout}
+                      className="mt-2 w-full flex items-center justify-center gap-2 bg-gray-600 text-white px-4 py-2 rounded-xl hover:bg-gray-700 transition-colors"
+                    >
+                      <LogOut className="w-4 h-4" />
+                      Se déconnecter
+                    </button>
+                  </div>
                 ) : (
-                  <>
-                    <button
-                      onClick={handleLogin}
-                      className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700 transition-colors shadow-lg"
-                    >
-                      <LogIn className="w-5 h-5" />
-                      Se connecter
-                    </button>
-                    <button
-                      onClick={() => {
-                        alert('Veuillez vous connecter pour ajouter une recette');
-                      }}
-                      className="w-full flex items-center justify-center gap-2 bg-orange-600 text-white px-6 py-3 rounded-xl hover:bg-orange-700 transition-colors shadow-lg"
-                    >
-                      <Plus className="w-5 h-5" />
-                      Nouvelle Recette
-                    </button>
-                  </>
+                  <button
+                    onClick={handleLogin}
+                    className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700 transition-colors shadow-lg"
+                  >
+                    <LogIn className="w-5 h-5" />
+                    Se connecter
+                  </button>
                 )}
               </div>
             </div>
+
+            {/* Bouton Flottant Ajouter Recette */}
+            {user && (
+              <button
+                onClick={() => setCurrentView('add')}
+                className="fixed bottom-6 right-6 bg-orange-600 text-white p-4 rounded-full hover:bg-orange-700 transition-all shadow-2xl hover:scale-110 z-50"
+                title="Ajouter une recette"
+              >
+                <Plus className="w-7 h-7" />
+              </button>
+            )}
 
             {!user && (
               <div className="mb-6 bg-blue-50 border-2 border-blue-200 rounded-xl p-4">
