@@ -204,18 +204,18 @@ export default function RecipeManager() {
         <div className="max-w-6xl mx-auto p-6">
           <div className="bg-white rounded-2xl shadow-xl p-8">
             <div className="mb-8">
-              <div className="flex items-center gap-3 mb-4">
+              <div className="flex items-center justify-center gap-3 mb-4">
                 <ChefHat className="w-10 h-10 text-orange-600" />
-                <div>
+                <div className="text-center">
                   <h1 className="text-4xl font-bold text-gray-800">Mes Recettes</h1>
                   <SyncIndicator />
                 </div>
               </div>
               
-              <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-3 max-w-md mx-auto">
                 {user ? (
                   <>
-                    <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
+                    <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-center">
                       <p className="text-sm text-gray-600">Connecté en tant que</p>
                       <p className="text-sm font-semibold text-gray-800">{user.email}</p>
                     </div>
@@ -267,34 +267,37 @@ export default function RecipeManager() {
               </div>
             )}
 
-            <div className="mb-6">
-              <div className="flex gap-3">
-                <div className="flex-1 relative">
-                  <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                  <input
-                    type="text"
-                    placeholder="Rechercher par nom ou ingrédient..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-12 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:border-orange-500 focus:outline-none"
-                  />
-                </div>
+            <div className="mb-6 space-y-3">
+              <div className="relative">
+                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <input
+                  type="text"
+                  placeholder="Rechercher par nom ou ingrédient..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-12 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:border-orange-500 focus:outline-none"
+                />
+              </div>
+              
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-semibold text-gray-700 whitespace-nowrap">Filtrer par :</span>
                 <select
                   value={filterType}
                   onChange={(e) => setFilterType(e.target.value)}
-                  className="px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-orange-500 focus:outline-none bg-white font-semibold"
+                  className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-orange-500 focus:outline-none bg-white font-semibold"
                 >
                   <option value="">Tous les types</option>
                   <option value="Entrée">Entrée</option>
                   <option value="Plat">Plat</option>
                   <option value="Dessert">Dessert</option>
-                  <option value="Petit-déjeuner">Petit-déj</option>
+                  <option value="Petit-déjeuner">Petit-déjeuner</option>
                   <option value="Goûter">Goûter</option>
                 </select>
               </div>
+
               {(searchQuery || filterType) && (
-                <div className="mt-3 flex items-center gap-2 text-sm text-gray-600">
-                  <span>Filtres actifs :</span>
+                <div className="flex items-center gap-2 text-sm text-gray-600 flex-wrap">
+                  <span className="font-semibold">Filtres actifs :</span>
                   {searchQuery && (
                     <span className="px-3 py-1 bg-orange-100 text-orange-700 rounded-full">
                       "{searchQuery}"
@@ -310,9 +313,9 @@ export default function RecipeManager() {
                       setSearchQuery('');
                       setFilterType('');
                     }}
-                    className="text-red-600 hover:text-red-700 font-semibold ml-2"
+                    className="text-red-600 hover:text-red-700 font-semibold"
                   >
-                    Effacer
+                    ✕ Effacer
                   </button>
                 </div>
               )}
