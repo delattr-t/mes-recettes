@@ -11,6 +11,7 @@ export default function RecipeManager() {
   const [viewingRecipe, setViewingRecipe] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState('');
+  const [gridView, setGridView] = useState('single'); // 'single' ou 'double'
   const [syncStatus, setSyncStatus] = useState('connecting');
   const [user, setUser] = useState(null);
   
@@ -268,15 +269,32 @@ export default function RecipeManager() {
             )}
 
             <div className="mb-6 space-y-3">
-              <div className="relative">
-                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                <input
-                  type="text"
-                  placeholder="Rechercher par nom ou ingrédient..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-12 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:border-orange-500 focus:outline-none"
-                />
+              <div className="flex gap-3">
+                <div className="flex-1 relative">
+                  <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                  <input
+                    type="text"
+                    placeholder="Rechercher par nom ou ingrédient..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-12 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:border-orange-500 focus:outline-none"
+                  />
+                </div>
+                <button
+                  onClick={() => setGridView(gridView === 'single' ? 'double' : 'single')}
+                  className="px-4 py-3 border-2 border-gray-200 rounded-xl hover:border-orange-500 transition-colors bg-white"
+                  title={gridView === 'single' ? '2 colonnes' : '1 colonne'}
+                >
+                  {gridView === 'single' ? (
+                    <svg className="w-5 h-5 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                    </svg>
+                  ) : (
+                    <svg className="w-5 h-5 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                    </svg>
+                  )}
+                </button>
               </div>
               
               <div className="flex items-center gap-3">
@@ -329,7 +347,7 @@ export default function RecipeManager() {
                 </p>
               </div>
             ) : (
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              <div className={`grid gap-4 ${gridView === 'single' ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3' : 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4'}`}>
                 {filteredRecipes.map((recipe) => (
                   <div 
                     key={recipe.id} 
@@ -337,7 +355,7 @@ export default function RecipeManager() {
                     className="bg-white rounded-xl overflow-hidden shadow-md hover:shadow-xl transition-shadow cursor-pointer"
                   >
                     {recipe.image && (
-                      <div className="h-48 overflow-hidden bg-gray-100">
+                      <div className={`overflow-hidden bg-gray-100 ${gridView === 'single' ? 'h-48' : 'h-32'}`}>
                         <img 
                           src={recipe.image} 
                           alt={recipe.name}
@@ -348,26 +366,31 @@ export default function RecipeManager() {
                         />
                       </div>
                     )}
-                    <div className="p-6">
-                      <h3 className="text-xl font-bold text-gray-800 mb-3">{recipe.name}</h3>
+                    <div className={gridView === 'single' ? 'p-6' : 'p-3'}>
+                      <h3 className={`font-bold text-gray-800 mb-2 ${gridView === 'single' ? 'text-xl' : 'text-sm'}`}>{recipe.name}</h3>
                       
                       {recipe.servings && (
-                        <p className="text-xs text-gray-500 mb-2">
-                          👥 Pour {recipe.servings} personne{recipe.servings > 1 ? 's' : ''}
+                        <p className={`text-gray-500 mb-2 ${gridView === 'single' ? 'text-xs' : 'text-xs'}`}>
+                          👥 {recipe.servings}p
                         </p>
                       )}
 
                       {recipe.types && recipe.types.length > 0 && (
-                        <div className="mb-3 flex flex-wrap gap-2">
-                          {recipe.types.map((type, idx) => (
-                            <span key={idx} className="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">
+                        <div className="mb-2 flex flex-wrap gap-1">
+                          {recipe.types.slice(0, gridView === 'single' ? 3 : 2).map((type, idx) => (
+                            <span key={idx} className={`inline-block px-2 py-1 rounded-full font-semibold bg-green-100 text-green-700 ${gridView === 'single' ? 'text-xs' : 'text-xs'}`}>
                               {type}
                             </span>
                           ))}
+                          {recipe.types.length > (gridView === 'single' ? 3 : 2) && (
+                            <span className="inline-block px-2 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">
+                              +{recipe.types.length - (gridView === 'single' ? 3 : 2)}
+                            </span>
+                          )}
                         </div>
                       )}
                       
-                      {recipe.ingredients && recipe.ingredients.length > 0 && (
+                      {gridView === 'single' && recipe.ingredients && recipe.ingredients.length > 0 && (
                         <div className="mb-3">
                           <p className="text-sm font-semibold text-orange-700 mb-2">Ingrédients:</p>
                           <div className="flex flex-wrap gap-2">
@@ -385,7 +408,7 @@ export default function RecipeManager() {
                         </div>
                       )}
                       
-                      {recipe.createdBy && (
+                      {recipe.createdBy && gridView === 'single' && (
                         <p className="text-xs text-gray-400 mt-3">
                           Par {recipe.createdBy}
                         </p>
