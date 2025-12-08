@@ -21,7 +21,6 @@ export default function RecipeManager() {
     steps: '',
     image: ''
   });
-  const [activeTab, setActiveTab] = useState('ingredients');
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
@@ -100,7 +99,7 @@ export default function RecipeManager() {
       setCurrentView('home');
     } catch (error) {
       console.error('Erreur lors de la sauvegarde:', error);
-      alert('Erreur lors de la sauvegarde de la recette. Vérifiez que vous êtes connecté.');
+      alert('Erreur lors de la sauvegarde de la recette');
       setSyncStatus('error');
     }
   };
@@ -120,7 +119,6 @@ export default function RecipeManager() {
       setSyncStatus('synced');
     } catch (error) {
       console.error('Erreur lors de la suppression:', error);
-      alert('Erreur lors de la suppression. Vérifiez que vous êtes connecté.');
       setSyncStatus('error');
     }
   };
@@ -151,7 +149,6 @@ export default function RecipeManager() {
   const resetForm = () => {
     setNewRecipe({ name: '', servings: '', types: [], ingredients: '', steps: '', image: '' });
     setEditingRecipe(null);
-    setActiveTab('ingredients');
   };
 
   const toggleType = (type) => {
@@ -283,7 +280,11 @@ export default function RecipeManager() {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {filteredRecipes.map((recipe) => (
-                  <div key={recipe.id} className="bg-white rounded-xl overflow-hidden shadow-md hover:shadow-xl transition-shadow">
+                  <div 
+                    key={recipe.id} 
+                    onClick={() => viewRecipe(recipe)}
+                    className="bg-white rounded-xl overflow-hidden shadow-md hover:shadow-xl transition-shadow cursor-pointer"
+                  >
                     {recipe.image && (
                       <div className="h-48 overflow-hidden bg-gray-100">
                         <img 
@@ -297,27 +298,7 @@ export default function RecipeManager() {
                       </div>
                     )}
                     <div className="p-6">
-                      <div className="flex justify-between items-start mb-3">
-                        <h3 className="text-xl font-bold text-gray-800 flex-1">{recipe.name}</h3>
-                        {user && (
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => editRecipe(recipe)}
-                              className="text-blue-600 hover:text-blue-700 p-2"
-                              title="Modifier"
-                            >
-                              <Edit2 className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => deleteRecipe(recipe.id)}
-                              className="text-red-600 hover:text-red-700 p-2"
-                              title="Supprimer"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        )}
-                      </div>
+                      <h3 className="text-xl font-bold text-gray-800 mb-3">{recipe.name}</h3>
                       
                       {recipe.servings && (
                         <p className="text-xs text-gray-500 mb-2">
@@ -353,12 +334,6 @@ export default function RecipeManager() {
                         </div>
                       )}
                       
-                      {recipe.description && (
-                        <p className="text-sm text-gray-600 line-clamp-3">
-                          {recipe.description}
-                        </p>
-                      )}
-                      
                       {recipe.createdBy && (
                         <p className="text-xs text-gray-400 mt-3">
                           Par {recipe.createdBy}
@@ -375,7 +350,6 @@ export default function RecipeManager() {
     );
   }
 
-  // Vue détaillée d'une recette
   if (currentView === 'view' && viewingRecipe) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-orange-50 to-red-50">
