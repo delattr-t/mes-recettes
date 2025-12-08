@@ -10,6 +10,7 @@ export default function RecipeManager() {
   const [editingRecipe, setEditingRecipe] = useState(null);
   const [viewingRecipe, setViewingRecipe] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [filterType, setFilterType] = useState('');
   const [syncStatus, setSyncStatus] = useState('connecting');
   const [user, setUser] = useState(null);
   
@@ -160,13 +161,22 @@ export default function RecipeManager() {
   };
 
   const filteredRecipes = recipes.filter(recipe => {
-    if (!searchQuery.trim()) return true;
-    const query = searchQuery.toLowerCase();
-    const matchesName = recipe.name.toLowerCase().includes(query);
-    const matchesIngredients = recipe.ingredients && recipe.ingredients.some(ing => 
-      ing.toLowerCase().includes(query)
-    );
-    return matchesName || matchesIngredients;
+    // Filtre par recherche
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      const matchesName = recipe.name.toLowerCase().includes(query);
+      const matchesIngredients = recipe.ingredients && recipe.ingredients.some(ing => 
+        ing.toLowerCase().includes(query)
+      );
+      if (!matchesName && !matchesIngredients) return false;
+    }
+    
+    // Filtre par type
+    if (filterType && recipe.types && recipe.types.length > 0) {
+      if (!recipe.types.includes(filterType)) return false;
+    }
+    
+    return true;
   });
 
   const SyncIndicator = () => {
@@ -258,16 +268,54 @@ export default function RecipeManager() {
             )}
 
             <div className="mb-6">
-              <div className="relative">
-                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                <input
-                  type="text"
-                  placeholder="Rechercher par nom ou ingrédient..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-12 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:border-orange-500 focus:outline-none"
-                />
+              <div className="flex gap-3">
+                <div className="flex-1 relative">
+                  <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                  <input
+                    type="text"
+                    placeholder="Rechercher par nom ou ingrédient..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-12 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:border-orange-500 focus:outline-none"
+                  />
+                </div>
+                <select
+                  value={filterType}
+                  onChange={(e) => setFilterType(e.target.value)}
+                  className="px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-orange-500 focus:outline-none bg-white font-semibold"
+                >
+                  <option value="">Tous les types</option>
+                  <option value="Entrée">Entrée</option>
+                  <option value="Plat">Plat</option>
+                  <option value="Dessert">Dessert</option>
+                  <option value="Petit-déjeuner">Petit-déj</option>
+                  <option value="Goûter">Goûter</option>
+                </select>
               </div>
+              {(searchQuery || filterType) && (
+                <div className="mt-3 flex items-center gap-2 text-sm text-gray-600">
+                  <span>Filtres actifs :</span>
+                  {searchQuery && (
+                    <span className="px-3 py-1 bg-orange-100 text-orange-700 rounded-full">
+                      "{searchQuery}"
+                    </span>
+                  )}
+                  {filterType && (
+                    <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full">
+                      {filterType}
+                    </span>
+                  )}
+                  <button
+                    onClick={() => {
+                      setSearchQuery('');
+                      setFilterType('');
+                    }}
+                    className="text-red-600 hover:text-red-700 font-semibold ml-2"
+                  >
+                    Effacer
+                  </button>
+                </div>
+              )}
             </div>
 
             {filteredRecipes.length === 0 ? (
@@ -309,7 +357,7 @@ export default function RecipeManager() {
                       {recipe.types && recipe.types.length > 0 && (
                         <div className="mb-3 flex flex-wrap gap-2">
                           {recipe.types.map((type, idx) => (
-                            <span key={idx} className="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-700">
+                            <span key={idx} className="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">
                               {type}
                             </span>
                           ))}
@@ -389,7 +437,7 @@ export default function RecipeManager() {
                   </div>
                 )}
                 {viewingRecipe.types && viewingRecipe.types.length > 0 && viewingRecipe.types.map((type, idx) => (
-                  <span key={idx} className="inline-block px-4 py-2 rounded-xl text-sm font-semibold bg-purple-100 text-purple-700">
+                  <span key={idx} className="inline-block px-4 py-2 rounded-xl text-sm font-semibold bg-green-100 text-green-700">
                     {type}
                   </span>
                 ))}
@@ -541,8 +589,8 @@ export default function RecipeManager() {
                   onClick={() => toggleType(type)}
                   className={`px-4 py-3 rounded-xl border-2 font-semibold transition-all ${
                     newRecipe.types.includes(type)
-                      ? 'bg-purple-600 text-white border-purple-600'
-                      : 'bg-white text-gray-700 border-gray-200 hover:border-purple-300'
+                      ? 'bg-green-600 text-white border-green-600'
+                      : 'bg-white text-gray-700 border-gray-200 hover:border-green-300'
                   }`}
                 >
                   {type}
@@ -553,7 +601,7 @@ export default function RecipeManager() {
               <div className="mt-3 flex flex-wrap gap-2">
                 <span className="text-sm text-gray-600">Sélectionné :</span>
                 {newRecipe.types.map((type, idx) => (
-                  <span key={idx} className="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-700">
+                  <span key={idx} className="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">
                     {type}
                   </span>
                 ))}
