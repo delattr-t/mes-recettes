@@ -208,7 +208,7 @@ export default function RecipeManager() {
               <div className="flex items-center justify-center gap-3 mb-4">
                 <ChefHat className="w-10 h-10 text-orange-600" />
                 <div className="text-center">
-                  <h1 className="text-4xl font-bold text-gray-800">Mes Recettes</h1>
+                  <h1 className="text-3xl font-bold text-gray-800">Mes Recettes</h1>
                   <SyncIndicator />
                 </div>
               </div>
