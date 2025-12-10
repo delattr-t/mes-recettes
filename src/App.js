@@ -12,10 +12,6 @@ export default function RecipeManager() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState('');
   const [gridView, setGridView] = useState('single');
-  const [shoppingMode, setShoppingMode] = useState(false);
-  const [selectedRecipes, setSelectedRecipes] = useState([]);
-  const [shoppingList, setShoppingList] = useState(null);
-  const [checkedIngredients, setCheckedIngredients] = useState([]);
   const [syncStatus, setSyncStatus] = useState('connecting');
   const [user, setUser] = useState(null);
   
@@ -165,46 +161,6 @@ export default function RecipeManager() {
     }
   };
 
-  const toggleRecipeSelection = (recipeId) => {
-    if (selectedRecipes.includes(recipeId)) {
-      setSelectedRecipes(selectedRecipes.filter(id => id !== recipeId));
-    } else {
-      setSelectedRecipes([...selectedRecipes, recipeId]);
-    }
-  };
-
-  const generateShoppingList = () => {
-    const selectedRecipesData = recipes.filter(r => selectedRecipes.includes(r.id));
-    const allIngredients = selectedRecipesData.flatMap(r => 
-      (r.ingredients || []).map(ing => ({ ingredient: ing, recipeName: r.name }))
-    );
-    
-    setShoppingList({
-      recipes: selectedRecipesData,
-      ingredients: allIngredients
-    });
-    setCheckedIngredients([]);
-    setCurrentView('shopping');
-  };
-
-  const toggleIngredient = (index) => {
-    if (checkedIngredients.includes(index)) {
-      setCheckedIngredients(checkedIngredients.filter(i => i !== index));
-    } else {
-      setCheckedIngredients([...checkedIngredients, index]);
-    }
-  };
-
-  const copyList = () => {
-    if (!shoppingList) return;
-    const text = shoppingList.ingredients
-      .filter((_, idx) => !checkedIngredients.includes(idx))
-      .map(item => item.ingredient)
-      .join('\n');
-    navigator.clipboard.writeText(text);
-    alert('Liste copiée dans le presse-papier !');
-  };
-
   const filteredRecipes = recipes.filter(recipe => {
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
@@ -325,20 +281,6 @@ export default function RecipeManager() {
                     </svg>
                   )}
                 </button>
-                <button
-                  onClick={() => {
-                    setShoppingMode(!shoppingMode);
-                    if (shoppingMode) setSelectedRecipes([]);
-                  }}
-                  className={`px-4 py-3 border-2 rounded-xl transition-colors ${
-                    shoppingMode 
-                      ? 'bg-green-600 text-white border-green-600' 
-                      : 'border-gray-200 bg-white hover:border-green-500'
-                  }`}
-                  title="Mode courses"
-                >
-                  🛒
-                </button>
               </div>
               
               <div className="flex items-center gap-3">
@@ -383,22 +325,6 @@ export default function RecipeManager() {
               )}
             </div>
 
-            {shoppingMode && selectedRecipes.length > 0 && (
-              <div className="mb-6 bg-green-50 border-2 border-green-200 rounded-xl p-4">
-                <div className="flex items-center justify-between">
-                  <p className="text-green-800 font-semibold">
-                    🛒 {selectedRecipes.length} recette{selectedRecipes.length > 1 ? 's' : ''} sélectionnée{selectedRecipes.length > 1 ? 's' : ''}
-                  </p>
-                  <button
-                    onClick={generateShoppingList}
-                    className="bg-green-600 text-white px-6 py-2 rounded-xl hover:bg-green-700 transition-colors shadow-lg font-semibold"
-                  >
-                    Faire les courses
-                  </button>
-                </div>
-              </div>
-            )}
-
             {filteredRecipes.length === 0 ? (
               <div className="text-center py-16">
                 <ChefHat className="w-20 h-20 text-gray-300 mx-auto mb-4" />
@@ -411,22 +337,9 @@ export default function RecipeManager() {
                 {filteredRecipes.map((recipe) => (
                   <div 
                     key={recipe.id} 
-                    onClick={() => !shoppingMode && viewRecipe(recipe)}
-                    className={`bg-white rounded-xl overflow-hidden shadow-md hover:shadow-xl transition-all relative ${
-                      shoppingMode ? 'cursor-default' : 'cursor-pointer'
-                    } ${selectedRecipes.includes(recipe.id) ? 'ring-4 ring-green-500' : ''}`}
+                    onClick={() => viewRecipe(recipe)}
+                    className="bg-white rounded-xl overflow-hidden shadow-md hover:shadow-xl transition-all cursor-pointer"
                   >
-                    {shoppingMode && (
-                      <div className="absolute top-2 right-2 z-10">
-                        <input
-                          type="checkbox"
-                          checked={selectedRecipes.includes(recipe.id)}
-                          onChange={() => toggleRecipeSelection(recipe.id)}
-                          className="w-6 h-6 text-green-600 border-2 border-gray-300 rounded focus:ring-green-500"
-                          onClick={(e) => e.stopPropagation()}
-                        />
-                      </div>
-                    )}
                     {recipe.image && (
                       <div className={`overflow-hidden bg-gray-100 ${gridView === 'single' ? 'h-48' : 'h-32'}`}>
                         <img 
@@ -544,9 +457,7 @@ export default function RecipeManager() {
 
               {viewingRecipe.ingredients && viewingRecipe.ingredients.length > 0 && (
                 <div className="mb-8">
-                  <h2 className="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-                    🥘 Ingrédients
-                  </h2>
+                  <h2 className="text-2xl font-bold text-gray-800 mb-4">🥘 Ingrédients</h2>
                   <div className="bg-orange-50 rounded-xl p-6">
                     <ul className="space-y-2">
                       {viewingRecipe.ingredients.map((ing, idx) => (
@@ -562,9 +473,7 @@ export default function RecipeManager() {
 
               {viewingRecipe.steps && (
                 <div className="mb-8">
-                  <h2 className="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-                    👨‍🍳 Préparation
-                  </h2>
+                  <h2 className="text-2xl font-bold text-gray-800 mb-4">👨‍🍳 Préparation</h2>
                   <div className="bg-gray-50 rounded-xl p-6">
                     <p className="text-gray-700 whitespace-pre-line leading-relaxed">{viewingRecipe.steps}</p>
                   </div>
@@ -619,29 +528,113 @@ export default function RecipeManager() {
     );
   }
 
-  if (currentView === 'shopping' && shoppingList) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-orange-50 to-red-50">
-        <div className="max-w-4xl mx-auto p-6">
-          <div className="bg-white rounded-2xl shadow-xl p-8">
-            <div className="flex items-center justify-between mb-8">
-              <h1 className="text-3xl font-bold text-gray-800">🛒 Liste de courses</h1>
-              <button
-                onClick={() => {
-                  setCurrentView('home');
-                  setShoppingList(null);
-                  setSelectedRecipes([]);
-                  setShoppingMode(false);
-                  setCheckedIngredients([]);
-                }}
-                className="text-gray-600 hover:text-gray-800 px-4 py-2 rounded-lg hover:bg-gray-100"
-              >
-                ✕
-              </button>
-            </div>
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-orange-50 to-red-50">
+      <div className="max-w-4xl mx-auto p-6">
+        <div className="bg-white rounded-2xl shadow-xl p-8">
+          <div className="flex items-center justify-between mb-8">
+            <h2 className="text-3xl font-bold text-gray-800">
+              {editingRecipe ? 'Modifier la Recette' : 'Nouvelle Recette'}
+            </h2>
+            <button
+              onClick={() => {
+                resetForm();
+                setCurrentView('home');
+              }}
+              className="text-gray-600 hover:text-gray-800 px-4 py-2 rounded-lg hover:bg-gray-100"
+            >
+              Annuler
+            </button>
+          </div>
 
-            <div className="mb-6 bg-blue-50 rounded-xl p-4">
-              <p className="text-sm font-semibold text-blue-800 mb-2">Recettes sélectionnées :</p>
-              <div className="flex flex-wrap gap-2">
-                {shoppingList.recipes.map((recipe) => (
-                  <span key={recipe.id} className="px-3 py-1 bg-blue-100 text-blue-700 rounded-
+          <div className="mb-6">
+            <label className="block text-sm font-semibold text-gray-700 mb-2">Nom de la recette</label>
+            <input
+              type="text"
+              value={newRecipe.name}
+              onChange={(e) => setNewRecipe({ ...newRecipe, name: e.target.value })}
+              placeholder="Ex: Tarte aux pommes"
+              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-orange-500 focus:outline-none"
+            />
+          </div>
+
+          <div className="mb-6">
+            <label className="block text-sm font-semibold text-gray-700 mb-2">Photo de la recette (URL)</label>
+            <input
+              type="url"
+              value={newRecipe.image}
+              onChange={(e) => setNewRecipe({ ...newRecipe, image: e.target.value })}
+              placeholder="Ex: https://example.com/image.jpg"
+              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-orange-500 focus:outline-none"
+            />
+            {newRecipe.image && (
+              <div className="mt-3 rounded-xl overflow-hidden border-2 border-gray-200">
+                <img 
+                  src={newRecipe.image} 
+                  alt="Aperçu" 
+                  className="w-full h-64 object-cover"
+                  onError={(e) => { e.target.style.display = 'none'; }}
+                />
+              </div>
+            )}
+          </div>
+
+          <div className="mb-6">
+            <label className="block text-sm font-semibold text-gray-700 mb-2">Types de plat (sélection multiple)</label>
+            <div className="grid grid-cols-2 gap-3">
+              {['Entrée', 'Plat', 'Dessert', 'Petit-déjeuner', 'Goûter'].map((type) => (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => toggleType(type)}
+                  className={`px-4 py-3 rounded-xl border-2 font-semibold transition-all ${
+                    newRecipe.types.includes(type)
+                      ? 'bg-green-600 text-white border-green-600'
+                      : 'bg-white text-gray-700 border-gray-200 hover:border-green-300'
+                  }`}
+                >
+                  {type}
+                </button>
+              ))}
+            </div>
+            {newRecipe.types.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                <span className="text-sm text-gray-600">Sélectionné :</span>
+                {newRecipe.types.map((type, idx) => (
+                  <span key={idx} className="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">
+                    {type}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="mb-6">
+            <label className="block text-sm font-semibold text-gray-700 mb-2">Nombre de personnes</label>
+            <input
+              type="number"
+              min="1"
+              value={newRecipe.servings}
+              onChange={(e) => setNewRecipe({ ...newRecipe, servings: e.target.value })}
+              placeholder="Ex: 4"
+              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-orange-500 focus:outline-none"
+            />
+          </div>
+
+          <div className="mb-6">
+            <label className="block text-sm font-semibold text-gray-700 mb-2">Liste des ingrédients (un par ligne)</label>
+            <textarea
+              value={newRecipe.ingredients}
+              onChange={(e) => setNewRecipe({ ...newRecipe, ingredients: e.target.value })}
+              placeholder="Ex:&#10;200g de farine&#10;3 œufs&#10;100ml de lait"
+              rows="10"
+              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-orange-500 focus:outline-none resize-none"
+            />
+          </div>
+
+          <div className="mb-6">
+            <label className="block text-sm font-semibold text-gray-700 mb-2">Étapes de préparation</label>
+            <textarea
+              value={newRecipe.steps}
+              onChange={(e) => setNewRecipe({ ...newRecipe, steps: e.target.value })}
+              placeholder="Décrivez les étapes de préparation...&#10;&#10;1. Préchauffer le four à 180°C&#10
