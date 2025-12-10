@@ -602,8 +602,6 @@ export default function RecipeManager() {
 
   // Vue liste de courses
   if (currentView === 'shopping' && shoppingList) {
-    const [checkedIngredients, setCheckedIngredients] = useState([]);
-    
     const toggleIngredient = (index) => {
       if (checkedIngredients.includes(index)) {
         setCheckedIngredients(checkedIngredients.filter(i => i !== index));
