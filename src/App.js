@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, ChefHat, Trash2, Edit2, Cloud, CloudOff, LogOut, LogIn, Menu, X } from 'lucide-react';
+import { Plus, Search, ChefHat, Trash2, Edit2, Cloud, CloudOff, LogOut, LogIn, ShoppingCart } from 'lucide-react';
 import { database, auth, googleProvider } from './firebaseConfig';
 import { ref, set, onValue, remove } from 'firebase/database';
 import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
@@ -14,7 +14,6 @@ export default function RecipeManager() {
   const [gridView, setGridView] = useState('single');
   const [syncStatus, setSyncStatus] = useState('connecting');
   const [user, setUser] = useState(null);
-  const [menuOpen, setMenuOpen] = useState(false);
   const [shoppingMode, setShoppingMode] = useState(false);
   const [selectedRecipes, setSelectedRecipes] = useState([]);
   const [shoppingList, setShoppingList] = useState(null);
@@ -146,13 +145,11 @@ export default function RecipeManager() {
     });
     setViewingRecipe(null);
     setCurrentView('add');
-    setMenuOpen(false);
   };
 
   const viewRecipe = (recipe) => {
     setViewingRecipe(recipe);
     setCurrentView('view');
-    setMenuOpen(false);
   };
 
   const resetForm = () => {
@@ -180,7 +177,6 @@ export default function RecipeManager() {
     setShoppingMode(true);
     setSelectedRecipes([]);
     setCurrentView('home');
-    setMenuOpen(false);
   };
 
   const generateShoppingList = () => {
@@ -202,7 +198,6 @@ export default function RecipeManager() {
     });
     setCurrentView('shopping');
     setShoppingMode(false);
-    setMenuOpen(false);
   };
 
   const filteredRecipes = recipes.filter(recipe => {
@@ -241,106 +236,65 @@ export default function RecipeManager() {
     );
   };
 
-  // Menu déroulant
-  const DropdownMenu = () => (
-    <div className="relative">
-      <button
-        onClick={() => setMenuOpen(!menuOpen)}
-        className="p-3 rounded-xl bg-white border-2 border-gray-200 hover:border-orange-500 transition-colors"
-      >
-        {menuOpen ? <X className="w-6 h-6 text-gray-700" /> : <Menu className="w-6 h-6 text-gray-700" />}
-      </button>
-
-      {menuOpen && (
-        <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-2xl border-2 border-gray-100 overflow-hidden z-50">
-          <div className="py-2">
-            <button
-              onClick={() => {
-                setCurrentView('home');
-                setShoppingMode(false);
-                setMenuOpen(false);
-              }}
-              className="w-full px-6 py-3 text-left hover:bg-orange-50 transition-colors flex items-center gap-3 text-gray-700 font-semibold"
-            >
-              <ChefHat className="w-5 h-5" />
-              Mes recettes
-            </button>
-
-            <button
-              onClick={startShoppingMode}
-              className="w-full px-6 py-3 text-left hover:bg-orange-50 transition-colors flex items-center gap-3 text-gray-700 font-semibold"
-            >
-              🛒 Liste de courses
-            </button>
-
-            {user && (
-              <button
-                onClick={() => {
-                  setCurrentView('add');
-                  setMenuOpen(false);
-                }}
-                className="w-full px-6 py-3 text-left hover:bg-orange-50 transition-colors flex items-center gap-3 text-gray-700 font-semibold"
-              >
-                <Plus className="w-5 h-5" />
-                Ajouter une recette
-              </button>
-            )}
-
-            <div className="border-t border-gray-200 my-2"></div>
-
-            {user ? (
-              <button
-                onClick={() => {
-                  handleLogout();
-                  setMenuOpen(false);
-                }}
-                className="w-full px-6 py-3 text-left hover:bg-red-50 transition-colors flex items-center gap-3 text-red-600 font-semibold"
-              >
-                <LogOut className="w-5 h-5" />
-                Se déconnecter
-              </button>
-            ) : (
-              <button
-                onClick={() => {
-                  handleLogin();
-                  setMenuOpen(false);
-                }}
-                className="w-full px-6 py-3 text-left hover:bg-blue-50 transition-colors flex items-center gap-3 text-blue-600 font-semibold"
-              >
-                <LogIn className="w-5 h-5" />
-                Se connecter
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-
   if (currentView === 'home') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-orange-50 to-red-50">
         <div className="max-w-6xl mx-auto p-6">
           <div className="bg-white rounded-2xl shadow-xl p-8">
             <div className="mb-8">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <ChefHat className="w-10 h-10 text-orange-600" />
-                  <div>
-                    <h1 className="text-3xl font-bold text-gray-800">Mes Recettes</h1>
-                    <SyncIndicator />
-                  </div>
+              <div className="flex items-center justify-center gap-3 mb-4">
+                <ChefHat className="w-10 h-10 text-orange-600" />
+                <div className="text-center">
+                  <h1 className="text-3xl font-bold text-gray-800">Mes Recettes</h1>
+                  <SyncIndicator />
                 </div>
-                <DropdownMenu />
               </div>
               
-              {user && (
-                <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-center max-w-md mx-auto">
-                  <p className="text-sm text-gray-600">Connecté en tant que</p>
-                  <p className="text-sm font-semibold text-gray-800">{user.email}</p>
-                </div>
-              )}
+              <div className="flex flex-col gap-3 max-w-md mx-auto">
+                {user ? (
+                  <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-center">
+                    <p className="text-sm text-gray-600">Connecté en tant que</p>
+                    <p className="text-sm font-semibold text-gray-800">{user.email}</p>
+                    <button
+                      onClick={handleLogout}
+                      className="mt-2 w-full flex items-center justify-center gap-2 bg-gray-600 text-white px-4 py-2 rounded-xl hover:bg-gray-700 transition-colors"
+                    >
+                      <LogOut className="w-4 h-4" />
+                      Se déconnecter
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={handleLogin}
+                    className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700 transition-colors shadow-lg"
+                  >
+                    <LogIn className="w-5 h-5" />
+                    Se connecter
+                  </button>
+                )}
+              </div>
             </div>
+
+            {/* Boutons Flottants */}
+            {user && !shoppingMode && (
+              <button
+                onClick={() => setCurrentView('add')}
+                className="fixed bottom-6 right-6 bg-orange-600 text-white p-4 rounded-full hover:bg-orange-700 transition-all shadow-2xl hover:scale-110 z-50"
+                title="Ajouter une recette"
+              >
+                <Plus className="w-7 h-7" />
+              </button>
+            )}
+
+            {!shoppingMode && (
+              <button
+                onClick={startShoppingMode}
+                className="fixed bottom-6 right-24 bg-green-600 text-white p-4 rounded-full hover:bg-green-700 transition-all shadow-2xl hover:scale-110 z-50"
+                title="Liste de courses"
+              >
+                <ShoppingCart className="w-7 h-7" />
+              </button>
+            )}
 
             {shoppingMode && (
               <div className="mb-6 bg-green-50 border-2 border-green-200 rounded-xl p-4">
