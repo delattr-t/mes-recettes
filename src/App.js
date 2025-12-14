@@ -234,6 +234,64 @@ export default function RecipeManager() {
     setShoppingMode(false);
   };
 
+  // Fonction pour compresser et redimensionner une image
+  const compressImage = (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (event) => {
+        const img = new Image();
+        img.src = event.target.result;
+        img.onload = () => {
+          // Définir la taille maximale
+          const MAX_WIDTH = 1200;
+          const MAX_HEIGHT = 1200;
+          
+          let width = img.width;
+          let height = img.height;
+          
+          // Calculer les nouvelles dimensions en conservant le ratio
+          if (width > height) {
+            if (width > MAX_WIDTH) {
+              height = height * (MAX_WIDTH / width);
+              width = MAX_WIDTH;
+            }
+          } else {
+            if (height > MAX_HEIGHT) {
+              width = width * (MAX_HEIGHT / height);
+              height = MAX_HEIGHT;
+            }
+          }
+          
+          // Créer un canvas pour redimensionner
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          
+          // Convertir en base64 avec compression (qualité 0.8 = 80%)
+          const compressedBase64 = canvas.toDataURL('image/jpeg', 0.8);
+          
+          // Vérifier la taille finale
+          const sizeInMB = (compressedBase64.length * 0.75) / (1024 * 1024);
+          console.log(`Image compressée : ${sizeInMB.toFixed(2)} MB`);
+          
+          if (sizeInMB > 2) {
+            // Si encore trop grosse, réduire davantage la qualité
+            const extraCompressed = canvas.toDataURL('image/jpeg', 0.6);
+            resolve(extraCompressed);
+          } else {
+            resolve(compressedBase64);
+          }
+        };
+        img.onerror = reject;
+      };
+      reader.onerror = reject;
+    });
+  };
+
   // Fonction pour parser un ingrédient et extraire quantité, unité et nom
   const parseIngredient = (ingredient) => {
     // Nettoyer l'ingrédient
@@ -912,25 +970,23 @@ export default function RecipeManager() {
                 <input
                   type="file"
                   accept="image/*"
-                  onChange={(e) => {
+                  onChange={async (e) => {
                     const file = e.target.files?.[0];
                     if (file) {
-                      // Vérifier la taille (max 5MB)
-                      if (file.size > 5 * 1024 * 1024) {
-                        alert('L\'image est trop grande (max 5MB)');
-                        return;
+                      try {
+                        const compressedImage = await compressImage(file);
+                        setNewRecipe({ ...newRecipe, image: compressedImage });
+                      } catch (error) {
+                        console.error('Erreur compression:', error);
+                        alert('Erreur lors du traitement de l\'image');
                       }
-                      
-                      // Convertir en base64
-                      const reader = new FileReader();
-                      reader.onloadend = () => {
-                        setNewRecipe({ ...newRecipe, image: reader.result });
-                      };
-                      reader.readAsDataURL(file);
                     }
                   }}
                   className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-orange-500 focus:outline-none bg-white file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100"
                 />
+                <p className="text-xs text-gray-500 mt-1">
+                  📸 L'image sera automatiquement redimensionnée et compressée
+                </p>
               </div>
               
               {/* Option 2: URL */}
