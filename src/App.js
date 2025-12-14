@@ -598,7 +598,7 @@ export default function RecipeManager() {
                       </div>
                     )}
                     {recipe.image && (
-                      <div className={`overflow-hidden bg-gray-100 ${gridView === 'single' ? 'h-48' : 'h-32'} relative`}>
+                      <div className={`overflow-hidden bg-gray-100 ${gridView === 'single' ? 'h-48' : 'h-24'} relative`}>
                         <img 
                           src={recipe.image} 
                           alt={recipe.name}
