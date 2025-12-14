@@ -768,46 +768,87 @@ export default function RecipeManager() {
             </div>
 
             <div className="space-y-3">
+              <div className="bg-yellow-50 border-2 border-yellow-200 rounded-xl p-4 mb-4">
+                <p className="text-sm text-yellow-800">
+                  💡 <strong>Astuce :</strong> Copiez la liste ci-dessus, puis collez-la dans la barre de recherche de votre drive préféré. Vous pourrez ensuite chercher et ajouter chaque produit rapidement !
+                </p>
+              </div>
+
               <button
                 onClick={copyList}
                 className="w-full bg-orange-600 text-white px-6 py-3 rounded-xl hover:bg-orange-700 transition-colors shadow-lg font-semibold"
               >
-                📋 Copier la liste
+                📋 Copier la liste complète
               </button>
 
               <div className="grid grid-cols-2 gap-3">
-                <a
-                  href="https://www.carrefour.fr/drive"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block text-center bg-blue-600 text-white px-4 py-3 rounded-xl hover:bg-blue-700 transition-colors font-semibold"
+                <button
+                  onClick={() => {
+                    // Copier seulement les noms sans quantités
+                    const simpleList = editableShoppingList
+                      .split('\n')
+                      .map(line => {
+                        // Extraire juste le nom de l'ingrédient (entre la quantité et la parenthèse)
+                        const match = line.match(/•\s*(?:\d+[^a-zA-Z]*)?(.+?)\s*\(/);
+                        return match ? match[1].trim() : line.replace('•', '').trim();
+                      })
+                      .join('\n');
+                    navigator.clipboard.writeText(simpleList);
+                    alert('Liste simplifiée copiée (sans quantités) !');
+                  }}
+                  className="bg-purple-600 text-white px-4 py-3 rounded-xl hover:bg-purple-700 transition-colors font-semibold text-sm"
                 >
-                  🏪 Carrefour Drive
-                </a>
-                <a
-                  href="https://www.auchan.fr/magasins-et-drives"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block text-center bg-red-600 text-white px-4 py-3 rounded-xl hover:bg-red-700 transition-colors font-semibold"
+                  📝 Copier sans quantités
+                </button>
+                <button
+                  onClick={() => {
+                    // Copier pour envoi SMS/WhatsApp
+                    const cleanList = editableShoppingList.replace(/•/g, '-');
+                    navigator.clipboard.writeText(`🛒 Liste de courses:\n\n${cleanList}`);
+                    alert('Liste copiée pour SMS/WhatsApp !');
+                  }}
+                  className="bg-green-600 text-white px-4 py-3 rounded-xl hover:bg-green-700 transition-colors font-semibold text-sm"
                 >
-                  🏪 Auchan Drive
-                </a>
-                <a
-                  href="https://www.leclercdrive.fr"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block text-center bg-green-600 text-white px-4 py-3 rounded-xl hover:bg-green-700 transition-colors font-semibold"
-                >
-                  🏪 Leclerc Drive
-                </a>
-                <a
-                  href="https://www.coursesu.com/drive"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block text-center bg-yellow-600 text-white px-4 py-3 rounded-xl hover:bg-yellow-700 transition-colors font-semibold"
-                >
-                  🏪 U Drive
-                </a>
+                  💬 Copier pour SMS
+                </button>
+              </div>
+
+              <div className="border-t-2 border-gray-200 pt-4">
+                <p className="text-sm font-semibold text-gray-700 mb-3 text-center">Ouvrir un drive :</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <a
+                    href="https://www.carrefour.fr/drive"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block text-center bg-blue-600 text-white px-4 py-3 rounded-xl hover:bg-blue-700 transition-colors font-semibold"
+                  >
+                    🏪 Carrefour
+                  </a>
+                  <a
+                    href="https://www.auchan.fr/magasins-et-drives"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block text-center bg-red-600 text-white px-4 py-3 rounded-xl hover:bg-red-700 transition-colors font-semibold"
+                  >
+                    🏪 Auchan
+                  </a>
+                  <a
+                    href="https://www.leclercdrive.fr"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block text-center bg-green-600 text-white px-4 py-3 rounded-xl hover:bg-green-700 transition-colors font-semibold"
+                  >
+                    🏪 Leclerc
+                  </a>
+                  <a
+                    href="https://www.coursesu.com/drive"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block text-center bg-yellow-600 text-white px-4 py-3 rounded-xl hover:bg-yellow-700 transition-colors font-semibold"
+                  >
+                    🏪 U
+                  </a>
+                </div>
               </div>
 
               <button
@@ -861,25 +902,73 @@ export default function RecipeManager() {
 
           <div className="mb-6">
             <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Photo de la recette (URL)
+              Photo de la recette
             </label>
-            <input
-              type="url"
-              value={newRecipe.image}
-              onChange={(e) => setNewRecipe({ ...newRecipe, image: e.target.value })}
-              placeholder="Ex: https://example.com/image.jpg"
-              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-orange-500 focus:outline-none"
-            />
-            {newRecipe.image && (
-              <div className="mt-3 rounded-xl overflow-hidden border-2 border-gray-200">
-                <img 
-                  src={newRecipe.image} 
-                  alt="Aperçu" 
-                  className="w-full h-64 object-cover"
-                  onError={(e) => {
-                    e.target.style.display = 'none';
+            
+            <div className="space-y-3">
+              {/* Option 1: Upload depuis la galerie */}
+              <div>
+                <label className="block text-xs text-gray-600 mb-2">Option 1 : Depuis votre galerie</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      // Vérifier la taille (max 5MB)
+                      if (file.size > 5 * 1024 * 1024) {
+                        alert('L\'image est trop grande (max 5MB)');
+                        return;
+                      }
+                      
+                      // Convertir en base64
+                      const reader = new FileReader();
+                      reader.onloadend = () => {
+                        setNewRecipe({ ...newRecipe, image: reader.result });
+                      };
+                      reader.readAsDataURL(file);
+                    }
                   }}
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-orange-500 focus:outline-none bg-white file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100"
                 />
+              </div>
+              
+              {/* Option 2: URL */}
+              <div>
+                <label className="block text-xs text-gray-600 mb-2">Option 2 : Depuis une URL</label>
+                <input
+                  type="url"
+                  value={newRecipe.image?.startsWith('data:') ? '' : newRecipe.image}
+                  onChange={(e) => setNewRecipe({ ...newRecipe, image: e.target.value })}
+                  placeholder="Ex: https://example.com/image.jpg"
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-orange-500 focus:outline-none"
+                />
+              </div>
+            </div>
+            
+            {/* Aperçu de l'image */}
+            {newRecipe.image && (
+              <div className="mt-3">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-semibold text-gray-700">Aperçu :</span>
+                  <button
+                    type="button"
+                    onClick={() => setNewRecipe({ ...newRecipe, image: '' })}
+                    className="text-xs text-red-600 hover:text-red-700 font-semibold"
+                  >
+                    ✕ Supprimer l'image
+                  </button>
+                </div>
+                <div className="rounded-xl overflow-hidden border-2 border-gray-200">
+                  <img 
+                    src={newRecipe.image} 
+                    alt="Aperçu" 
+                    className="w-full h-64 object-cover"
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                    }}
+                  />
+                </div>
               </div>
             )}
           </div>
