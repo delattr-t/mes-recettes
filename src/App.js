@@ -211,8 +211,20 @@ export default function RecipeManager() {
       });
     });
     
-    // Créer la liste formatée
-    const allIngredients = Array.from(ingredientMap.values()).map(item => {
+    // Créer la liste formatée SANS les noms de recettes
+    const allIngredientsSimple = Array.from(ingredientMap.values()).map(item => {
+      let text = '• ';
+      if (item.quantity > 0) {
+        text += `${item.quantity}`;
+        if (item.unit) text += item.unit;
+        text += ' ';
+      }
+      text += item.name;
+      return text;
+    });
+    
+    // Créer la liste avec recettes pour référence interne
+    const allIngredientsWithRecipes = Array.from(ingredientMap.values()).map(item => {
       let text = '• ';
       if (item.quantity > 0) {
         text += `${item.quantity}`;
@@ -224,11 +236,12 @@ export default function RecipeManager() {
       return text;
     });
     
-    const listText = allIngredients.join('\n');
+    const listText = allIngredientsSimple.join('\n');
     setEditableShoppingList(listText);
     setShoppingList({
       recipes: selectedRecipesData,
-      ingredients: allIngredients
+      ingredients: allIngredientsSimple,
+      ingredientsWithRecipes: allIngredientsWithRecipes
     });
     setCurrentView('shopping');
     setShoppingMode(false);
@@ -815,7 +828,25 @@ export default function RecipeManager() {
             <div className="mb-6">
               <div className="flex items-center justify-between mb-3">
                 <h2 className="text-xl font-bold text-gray-800">Liste modifiable</h2>
-                <span className="text-sm text-gray-500">Vous pouvez modifier le texte ci-dessous</span>
+                <button
+                  onClick={() => {
+                    if (shoppingList.ingredientsWithRecipes) {
+                      const currentText = editableShoppingList;
+                      const hasRecipes = currentText.includes('(');
+                      
+                      if (hasRecipes) {
+                        // Passer à la version sans recettes
+                        setEditableShoppingList(shoppingList.ingredients.join('\n'));
+                      } else {
+                        // Passer à la version avec recettes
+                        setEditableShoppingList(shoppingList.ingredientsWithRecipes.join('\n'));
+                      }
+                    }
+                  }}
+                  className="text-xs bg-blue-100 text-blue-700 px-3 py-1.5 rounded-lg hover:bg-blue-200 transition-colors font-semibold"
+                >
+                  {editableShoppingList.includes('(') ? '👁️ Masquer recettes' : '👁️ Voir recettes'}
+                </button>
               </div>
               <textarea
                 value={editableShoppingList}
