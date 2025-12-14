@@ -186,9 +186,43 @@ export default function RecipeManager() {
     }
 
     const selectedRecipesData = recipes.filter(r => selectedRecipes.includes(r.id));
-    const allIngredients = selectedRecipesData.flatMap(r => 
-      (r.ingredients || []).map(ing => `• ${ing} (${r.name})`)
-    );
+    
+    // Parser et regrouper les ingrédients
+    const ingredientMap = new Map();
+    
+    selectedRecipesData.forEach(recipe => {
+      (recipe.ingredients || []).forEach(ing => {
+        const parsed = parseIngredient(ing);
+        const key = parsed.name.toLowerCase();
+        
+        if (ingredientMap.has(key)) {
+          const existing = ingredientMap.get(key);
+          existing.quantity += parsed.quantity;
+          existing.recipes.push(recipe.name);
+        } else {
+          ingredientMap.set(key, {
+            name: parsed.name,
+            quantity: parsed.quantity,
+            unit: parsed.unit,
+            recipes: [recipe.name],
+            originalText: ing
+          });
+        }
+      });
+    });
+    
+    // Créer la liste formatée
+    const allIngredients = Array.from(ingredientMap.values()).map(item => {
+      let text = '• ';
+      if (item.quantity > 0) {
+        text += `${item.quantity}`;
+        if (item.unit) text += item.unit;
+        text += ' ';
+      }
+      text += item.name;
+      text += ` (${item.recipes.join(', ')})`;
+      return text;
+    });
     
     const listText = allIngredients.join('\n');
     setEditableShoppingList(listText);
@@ -198,6 +232,61 @@ export default function RecipeManager() {
     });
     setCurrentView('shopping');
     setShoppingMode(false);
+  };
+
+  // Fonction pour parser un ingrédient et extraire quantité, unité et nom
+  const parseIngredient = (ingredient) => {
+    // Nettoyer l'ingrédient
+    const cleaned = ingredient.trim();
+    
+    // Regex pour capturer: quantité (nombre ou fraction) + unité optionnelle + nom
+    const patterns = [
+      // Ex: "200g de farine", "2 kg de tomates"
+      /^(\d+(?:[.,]\d+)?)\s*([a-zµ]+)?\s+(?:de?\s+)?(.+)$/i,
+      // Ex: "1/2 tasse de sucre"
+      /^(\d+\/\d+)\s*([a-zµ]+)?\s+(?:de?\s+)?(.+)$/i,
+      // Ex: "2 courgettes"
+      /^(\d+(?:[.,]\d+)?)\s+(.+)$/i,
+    ];
+    
+    for (const pattern of patterns) {
+      const match = cleaned.match(pattern);
+      if (match) {
+        let quantity = match[1];
+        
+        // Convertir les fractions en décimales
+        if (quantity.includes('/')) {
+          const [num, den] = quantity.split('/').map(Number);
+          quantity = num / den;
+        } else {
+          quantity = parseFloat(quantity.replace(',', '.'));
+        }
+        
+        // Si pattern avec 3 groupes (quantité, unité, nom)
+        if (match.length === 4) {
+          return {
+            quantity: quantity,
+            unit: match[2] || '',
+            name: match[3].trim()
+          };
+        }
+        // Si pattern avec 2 groupes (quantité, nom)
+        else {
+          return {
+            quantity: quantity,
+            unit: '',
+            name: match[2].trim()
+          };
+        }
+      }
+    }
+    
+    // Si aucun pattern ne correspond, retourner l'ingrédient tel quel
+    return {
+      quantity: 0,
+      unit: '',
+      name: cleaned
+    };
   };
 
   const filteredRecipes = recipes.filter(recipe => {
