@@ -25,7 +25,8 @@ export default function RecipeManager() {
     types: [],
     ingredients: '',
     steps: '',
-    image: ''
+    image: '',
+    tested: false
   });
 
   useEffect(() => {
@@ -92,6 +93,7 @@ export default function RecipeManager() {
       ingredients: newRecipe.ingredients.split('\n').filter(i => i.trim()),
       steps: newRecipe.steps,
       image: newRecipe.image,
+      tested: newRecipe.tested || false,
       createdAt: editingRecipe?.createdAt || new Date().toISOString(),
       createdBy: user.email
     };
@@ -141,7 +143,8 @@ export default function RecipeManager() {
       types: recipe.types || [],
       ingredients: recipe.ingredients.join('\n'),
       steps: recipe.steps,
-      image: recipe.image || ''
+      image: recipe.image || '',
+      tested: recipe.tested || false
     });
     setViewingRecipe(null);
     setCurrentView('add');
@@ -153,7 +156,7 @@ export default function RecipeManager() {
   };
 
   const resetForm = () => {
-    setNewRecipe({ name: '', servings: '', types: [], ingredients: '', steps: '', image: '' });
+    setNewRecipe({ name: '', servings: '', types: [], ingredients: '', steps: '', image: '', tested: false });
     setEditingRecipe(null);
   };
 
@@ -607,9 +610,21 @@ export default function RecipeManager() {
                             e.target.style.display = 'none';
                           }}
                         />
+                        {!recipe.tested && (
+                          <div className="absolute top-2 left-2 bg-yellow-500 text-white px-2 py-1 rounded-lg text-xs font-bold shadow-lg">
+                            ⭐ À tester
+                          </div>
+                        )}
                       </div>
                     )}
                     <div className={gridView === 'single' ? 'p-6' : 'p-3'}>
+                      {!recipe.image && !recipe.tested && (
+                        <div className="mb-2">
+                          <span className="inline-block bg-yellow-500 text-white px-2 py-1 rounded-lg text-xs font-bold">
+                            ⭐ À tester
+                          </span>
+                        </div>
+                      )}
                       <h3 className={`font-bold text-gray-800 mb-2 ${gridView === 'single' ? 'text-xl' : 'text-sm'}`}>{recipe.name}</h3>
                       
                       {recipe.servings && (
@@ -700,6 +715,11 @@ export default function RecipeManager() {
               </div>
 
               <div className="flex flex-wrap gap-3 mb-6">
+                {!viewingRecipe.tested && (
+                  <div className="bg-yellow-500 text-white px-4 py-2 rounded-xl font-bold shadow-lg">
+                    ⭐ À tester
+                  </div>
+                )}
                 {viewingRecipe.servings && (
                   <div className="flex items-center gap-2 bg-blue-50 px-4 py-2 rounded-xl">
                     <span className="text-blue-700 font-semibold">👥 {viewingRecipe.servings} personne{viewingRecipe.servings > 1 ? 's' : ''}</span>
@@ -748,6 +768,25 @@ export default function RecipeManager() {
               )}
 
               <div className="flex flex-col gap-3">
+                {!viewingRecipe.tested && user && (
+                  <button
+                    onClick={async () => {
+                      try {
+                        setSyncStatus('syncing');
+                        const recipeRef = ref(database, `recipes/${viewingRecipe.id}`);
+                        await set(recipeRef, { ...viewingRecipe, tested: true });
+                        setViewingRecipe({ ...viewingRecipe, tested: true });
+                        setSyncStatus('synced');
+                      } catch (error) {
+                        console.error('Erreur:', error);
+                        setSyncStatus('error');
+                      }
+                    }}
+                    className="w-full flex items-center justify-center gap-2 bg-green-600 text-white px-6 py-3 rounded-xl hover:bg-green-700 transition-colors shadow-lg font-semibold"
+                  >
+                    ✓ Marquer comme testée et validée
+                  </button>
+                )}
                 <button
                   onClick={() => {
                     setViewingRecipe(null);
@@ -1104,6 +1143,21 @@ export default function RecipeManager() {
               placeholder="Ex: 4"
               className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-orange-500 focus:outline-none"
             />
+          </div>
+
+          <div className="mb-6">
+            <label className="flex items-center gap-3 p-4 border-2 border-gray-200 rounded-xl cursor-pointer hover:border-orange-300 transition-colors">
+              <input
+                type="checkbox"
+                checked={newRecipe.tested}
+                onChange={(e) => setNewRecipe({ ...newRecipe, tested: e.target.checked })}
+                className="w-5 h-5 text-green-600 border-2 border-gray-300 rounded focus:ring-green-500"
+              />
+              <div>
+                <span className="font-semibold text-gray-800">✓ Recette testée et validée</span>
+                <p className="text-xs text-gray-500 mt-1">Cochez si vous avez déjà préparé cette recette</p>
+              </div>
+            </label>
           </div>
 
           <div className="mb-6">
