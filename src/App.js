@@ -18,6 +18,7 @@ export default function RecipeManager() {
   const [selectedRecipes, setSelectedRecipes] = useState([]);
   const [shoppingList, setShoppingList] = useState(null);
   const [editableShoppingList, setEditableShoppingList] = useState('');
+  const [checkedLines, setCheckedLines] = useState([]);
   
   const [newRecipe, setNewRecipe] = useState({
     name: '',
@@ -241,6 +242,7 @@ export default function RecipeManager() {
     
     const listText = allIngredientsSimple.join('\n');
     setEditableShoppingList(listText);
+    setCheckedLines([]);
     setShoppingList({
       recipes: selectedRecipesData,
       ingredients: allIngredientsSimple,
@@ -830,11 +832,6 @@ export default function RecipeManager() {
 
   // Vue liste de courses avec zone de texte modifiable
   if (currentView === 'shopping' && shoppingList) {
-    const copyList = () => {
-      navigator.clipboard.writeText(editableShoppingList);
-      alert('Liste copiée dans le presse-papier !');
-    };
-
     return (
       <div className="min-h-screen bg-gradient-to-br from-orange-50 to-red-50">
         <div className="max-w-4xl mx-auto p-6">
@@ -866,7 +863,7 @@ export default function RecipeManager() {
 
             <div className="mb-6">
               <div className="flex items-center justify-between mb-3">
-                <h2 className="text-xl font-bold text-gray-800">Liste modifiable</h2>
+                <h2 className="text-xl font-bold text-gray-800">Liste de courses</h2>
                 <button
                   onClick={() => {
                     if (shoppingList.ingredientsWithRecipes) {
@@ -887,26 +884,71 @@ export default function RecipeManager() {
                   {editableShoppingList.includes('(') ? '👁️ Masquer recettes' : '👁️ Voir recettes'}
                 </button>
               </div>
-              <textarea
-                value={editableShoppingList}
-                onChange={(e) => setEditableShoppingList(e.target.value)}
-                className="w-full h-96 px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-orange-500 focus:outline-none resize-none font-mono text-sm"
-                placeholder="Votre liste de courses apparaîtra ici..."
-              />
+
+              <div className="bg-white border-2 border-gray-200 rounded-xl p-4 space-y-2 max-h-96 overflow-y-auto">
+                {editableShoppingList.split('\n').map((line, index) => (
+                  <div
+                    key={index}
+                    onClick={() => {
+                      if (checkedLines.includes(index)) {
+                        setCheckedLines(checkedLines.filter(i => i !== index));
+                      } else {
+                        setCheckedLines([...checkedLines, index]);
+                      }
+                    }}
+                    className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-all ${
+                      checkedLines.includes(index)
+                        ? 'bg-gray-100 opacity-50'
+                        : 'bg-white hover:bg-orange-50'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checkedLines.includes(index)}
+                      onChange={() => {}}
+                      className="w-5 h-5 text-green-600 border-2 border-gray-300 rounded focus:ring-green-500"
+                    />
+                    <span className={`flex-1 ${checkedLines.includes(index) ? 'line-through text-gray-400' : 'text-gray-800'}`}>
+                      {line}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-3 flex items-center justify-between text-sm">
+                <span className="text-gray-600">
+                  {checkedLines.length} / {editableShoppingList.split('\n').length} articles cochés
+                </span>
+                {checkedLines.length > 0 && (
+                  <button
+                    onClick={() => setCheckedLines([])}
+                    className="text-orange-600 hover:text-orange-700 font-semibold"
+                  >
+                    ✕ Tout décocher
+                  </button>
+                )}
+              </div>
             </div>
 
             <div className="space-y-3">
               <div className="bg-yellow-50 border-2 border-yellow-200 rounded-xl p-4 mb-4">
                 <p className="text-sm text-yellow-800">
-                  💡 <strong>Astuce :</strong> Copiez la liste ci-dessus, puis collez-la dans la barre de recherche de votre drive préféré. Vous pourrez ensuite chercher et ajouter chaque produit rapidement !
+                  💡 <strong>Astuce :</strong> Cochez les articles au fur et à mesure de vos achats. Vous pouvez aussi copier la liste pour l'utiliser ailleurs !
                 </p>
               </div>
 
               <button
-                onClick={copyList}
+                onClick={() => {
+                  const uncheckedItems = editableShoppingList
+                    .split('\n')
+                    .filter((_, index) => !checkedLines.includes(index))
+                    .join('\n');
+                  navigator.clipboard.writeText(uncheckedItems || editableShoppingList);
+                  alert('Liste copiée dans le presse-papier !');
+                }}
                 className="w-full bg-orange-600 text-white px-6 py-3 rounded-xl hover:bg-orange-700 transition-colors shadow-lg font-semibold"
               >
-                📋 Copier la liste complète
+                📋 Copier la liste
               </button>
 
               <div className="grid grid-cols-2 gap-3">
@@ -915,8 +957,8 @@ export default function RecipeManager() {
                     // Copier seulement les noms sans quantités
                     const simpleList = editableShoppingList
                       .split('\n')
+                      .filter((_, index) => !checkedLines.includes(index))
                       .map(line => {
-                        // Extraire juste le nom de l'ingrédient (entre la quantité et la parenthèse)
                         const match = line.match(/•\s*(?:\d+[^a-zA-Z]*)?(.+?)\s*\(/);
                         return match ? match[1].trim() : line.replace('•', '').trim();
                       })
@@ -930,8 +972,10 @@ export default function RecipeManager() {
                 </button>
                 <button
                   onClick={() => {
-                    // Copier pour envoi SMS/WhatsApp
-                    const cleanList = editableShoppingList.replace(/•/g, '-');
+                    const uncheckedItems = editableShoppingList
+                      .split('\n')
+                      .filter((_, index) => !checkedLines.includes(index));
+                    const cleanList = uncheckedItems.map(line => line.replace(/•/g, '-')).join('\n');
                     navigator.clipboard.writeText(`🛒 Liste de courses:\n\n${cleanList}`);
                     alert('Liste copiée pour SMS/WhatsApp !');
                   }}
@@ -941,49 +985,12 @@ export default function RecipeManager() {
                 </button>
               </div>
 
-              <div className="border-t-2 border-gray-200 pt-4">
-                <p className="text-sm font-semibold text-gray-700 mb-3 text-center">Ouvrir un drive :</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <a
-                    href="https://www.carrefour.fr/drive"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="block text-center bg-blue-600 text-white px-4 py-3 rounded-xl hover:bg-blue-700 transition-colors font-semibold"
-                  >
-                    🏪 Carrefour
-                  </a>
-                  <a
-                    href="https://www.auchan.fr/magasins-et-drives"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="block text-center bg-red-600 text-white px-4 py-3 rounded-xl hover:bg-red-700 transition-colors font-semibold"
-                  >
-                    🏪 Auchan
-                  </a>
-                  <a
-                    href="https://www.leclercdrive.fr"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="block text-center bg-green-600 text-white px-4 py-3 rounded-xl hover:bg-green-700 transition-colors font-semibold"
-                  >
-                    🏪 Leclerc
-                  </a>
-                  <a
-                    href="https://www.coursesu.com/drive"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="block text-center bg-yellow-600 text-white px-4 py-3 rounded-xl hover:bg-yellow-700 transition-colors font-semibold"
-                  >
-                    🏪 U
-                  </a>
-                </div>
-              </div>
-
               <button
                 onClick={() => {
                   setCurrentView('home');
                   setShoppingList(null);
                   setSelectedRecipes([]);
+                  setCheckedLines([]);
                 }}
                 className="w-full px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-colors font-semibold"
               >
