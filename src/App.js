@@ -14,7 +14,7 @@ export default function RecipeManager() {
   };
 
   // Email de l'administrateur
-  const ADMIN_EMAIL = 'thidelattre@gmail.com'; // À MODIFIER avec votre vrai email
+  const ADMIN_EMAIL = 'votre-email@gmail.com'; // À MODIFIER avec votre vrai email
 
   const [recipes, setRecipes] = useState([]);
   const [currentView, setCurrentView] = useState('home');
@@ -1367,9 +1367,8 @@ export default function RecipeManager() {
             </label>
             
             <div className="space-y-3">
-              {/* Option 1: Upload depuis la galerie */}
+              {/* Upload depuis la galerie */}
               <div>
-                <label className="block text-xs text-gray-600 mb-2">Option 1 : Depuis votre galerie</label>
                 <input
                   type="file"
                   accept="image/*"
@@ -1390,18 +1389,6 @@ export default function RecipeManager() {
                 <p className="text-xs text-gray-500 mt-1">
                   📸 L'image sera automatiquement redimensionnée et compressée
                 </p>
-              </div>
-              
-              {/* Option 2: URL */}
-              <div>
-                <label className="block text-xs text-gray-600 mb-2">Option 2 : Depuis une URL</label>
-                <input
-                  type="url"
-                  value={newRecipe.image?.startsWith('data:') ? '' : newRecipe.image}
-                  onChange={(e) => setNewRecipe({ ...newRecipe, image: e.target.value })}
-                  placeholder="Ex: https://example.com/image.jpg"
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-orange-500 focus:outline-none"
-                />
               </div>
             </div>
             
