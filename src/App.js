@@ -57,10 +57,15 @@ export default function RecipeManager() {
         
         // Charger les données de l'utilisateur
         const userRef = ref(database, `users/${currentUser.email.replace(/\./g, '_')}`);
-        onValue(userRef, (snapshot) => {
+        
+        try {
+          const snapshot = await new Promise((resolve, reject) => {
+            onValue(userRef, resolve, reject, { onlyOnce: true });
+          });
+          
           const userData = snapshot.val();
           
-          if (userData) {
+          if (userData && userData.teamId) {
             // Vérifier si l'utilisateur est révoqué
             if (userData.isRevoked) {
               alert('Votre accès a été révoqué. Contactez l\'administrateur.');
@@ -71,16 +76,23 @@ export default function RecipeManager() {
             setUserTeam(userData.teamId);
             setShowTeamSelector(false);
           } else {
-            // Utilisateur non enregistré, afficher le sélecteur de team
+            // Utilisateur non enregistré ou sans team, afficher le sélecteur
+            console.log('Nouvel utilisateur détecté, affichage du sélecteur de team');
+            setUserTeam(null);
             setShowTeamSelector(true);
           }
-        });
+        } catch (error) {
+          console.error('Erreur lors du chargement des données utilisateur:', error);
+          // En cas d'erreur, afficher le sélecteur par sécurité
+          setShowTeamSelector(true);
+        }
         
         // Si admin, charger tous les utilisateurs
         if (adminCheck) {
           const usersRef = ref(database, 'users');
           onValue(usersRef, (snapshot) => {
             const usersData = snapshot.val();
+            console.log('Données utilisateurs chargées:', usersData);
             setAllUsers(usersData || {});
           });
         }
@@ -1223,51 +1235,67 @@ export default function RecipeManager() {
             <div className="mb-8">
               <h3 className="text-xl font-bold text-gray-800 mb-4">Gestion des utilisateurs</h3>
               
-              {Object.entries(TEAMS).map(([teamId, team]) => {
-                const teamUsers = Object.entries(allUsers).filter(([_, userData]) => userData.teamId === teamId);
-                
-                return (
-                  <div key={teamId} className="mb-6">
-                    <div 
-                      className="text-white px-4 py-2 rounded-xl font-bold mb-3 inline-block"
-                      style={{ backgroundColor: team.color }}
-                    >
-                      {team.name}
-                    </div>
-                    
-                    {teamUsers.length === 0 ? (
-                      <p className="text-gray-500 text-sm ml-4">Aucun utilisateur</p>
-                    ) : (
-                      <div className="space-y-2 ml-4">
-                        {teamUsers.map(([userKey, userData]) => (
-                          <div key={userKey} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                            <div>
-                              <p className="font-semibold text-gray-800">{userData.email}</p>
-                              <p className="text-xs text-gray-500">
-                                {userData.name} • Rejoint le {new Date(userData.joinedAt).toLocaleDateString('fr-FR')}
-                                {userData.isRevoked && <span className="text-red-600 font-bold ml-2">• RÉVOQUÉ</span>}
-                              </p>
-                            </div>
-                            {!userData.isRevoked && userData.email !== ADMIN_EMAIL && (
-                              <button
-                                onClick={() => handleRevokeUser(userData.email)}
-                                className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors text-sm font-semibold"
-                              >
-                                Révoquer
-                              </button>
-                            )}
-                            {userData.email === ADMIN_EMAIL && (
-                              <span className="bg-orange-100 text-orange-700 px-3 py-1 rounded-full text-xs font-bold">
-                                ADMIN
-                              </span>
-                            )}
-                          </div>
-                        ))}
+              {Object.keys(allUsers).length === 0 ? (
+                <div className="bg-yellow-50 border-2 border-yellow-200 rounded-xl p-4 mb-4">
+                  <p className="text-sm text-yellow-800">
+                    ⚠️ Aucun utilisateur trouvé dans la base de données. Les utilisateurs apparaîtront ici après leur première connexion et sélection de famille.
+                  </p>
+                </div>
+              ) : (
+                Object.entries(TEAMS).map(([teamId, team]) => {
+                  const teamUsers = Object.entries(allUsers).filter(([userKey, userData]) => {
+                    // userKey est déjà formaté avec underscores depuis Firebase
+                    return userData && userData.teamId === teamId;
+                  });
+                  
+                  return (
+                    <div key={teamId} className="mb-6">
+                      <div 
+                        className="text-white px-4 py-2 rounded-xl font-bold mb-3 inline-block"
+                        style={{ backgroundColor: team.color }}
+                      >
+                        {team.name}
                       </div>
-                    )}
-                  </div>
-                );
-              })}
+                      
+                      {teamUsers.length === 0 ? (
+                        <p className="text-gray-500 text-sm ml-4">Aucun utilisateur</p>
+                      ) : (
+                        <div className="space-y-2 ml-4">
+                          {teamUsers.map(([userKey, userData]) => {
+                            // Reconvertir la clé avec underscores en email avec points pour l'affichage
+                            const displayEmail = userData.email || userKey.replace(/_/g, '.');
+                            
+                            return (
+                              <div key={userKey} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                <div>
+                                  <p className="font-semibold text-gray-800">{displayEmail}</p>
+                                  <p className="text-xs text-gray-500">
+                                    {userData.name} • Rejoint le {new Date(userData.joinedAt).toLocaleDateString('fr-FR')}
+                                    {userData.isRevoked && <span className="text-red-600 font-bold ml-2">• RÉVOQUÉ</span>}
+                                  </p>
+                                </div>
+                                {!userData.isRevoked && displayEmail !== ADMIN_EMAIL && (
+                                  <button
+                                    onClick={() => handleRevokeUser(displayEmail)}
+                                    className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors text-sm font-semibold"
+                                  >
+                                    Révoquer
+                                  </button>
+                                )}
+                                {displayEmail === ADMIN_EMAIL && (
+                                  <span className="bg-orange-100 text-orange-700 px-3 py-1 rounded-full text-xs font-bold">
+                                    ADMIN
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
             </div>
 
             <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4">
