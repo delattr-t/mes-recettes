@@ -5,15 +5,31 @@ import { ref, set, onValue, remove } from 'firebase/database';
 import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
 
 export default function RecipeManager() {
+  // Configuration des teams
+  const TEAMS = {
+    'papa-maman': { name: 'Papa & Maman', color: '#3B82F6' },
+    'camille-maxime': { name: 'Camille & Maxime', color: '#10B981' },
+    'florent-maniola': { name: 'Florent & Maniola', color: '#F59E0B' },
+    'thibaut-mathilde': { name: 'Thibaut & Mathilde', color: '#8B5CF6' }
+  };
+
+  // Email de l'administrateur
+  const ADMIN_EMAIL = 'thidelattre@gmail.com'; // À MODIFIER avec votre vrai email
+
   const [recipes, setRecipes] = useState([]);
   const [currentView, setCurrentView] = useState('home');
   const [editingRecipe, setEditingRecipe] = useState(null);
   const [viewingRecipe, setViewingRecipe] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState('');
+  const [filterTeam, setFilterTeam] = useState(''); // Nouveau filtre team
   const [gridView, setGridView] = useState('single');
   const [syncStatus, setSyncStatus] = useState('connecting');
   const [user, setUser] = useState(null);
+  const [userTeam, setUserTeam] = useState(null); // Team de l'utilisateur
+  const [isAdmin, setIsAdmin] = useState(false); // Si l'utilisateur est admin
+  const [showTeamSelector, setShowTeamSelector] = useState(false); // Afficher le sélecteur de team
+  const [allUsers, setAllUsers] = useState({}); // Tous les utilisateurs pour l'admin
   const [shoppingMode, setShoppingMode] = useState(false);
   const [selectedRecipes, setSelectedRecipes] = useState([]);
   const [shoppingList, setShoppingList] = useState(null);
@@ -31,8 +47,48 @@ export default function RecipeManager() {
   });
 
   useEffect(() => {
-    const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
+      
+      if (currentUser) {
+        // Vérifier si l'utilisateur est admin
+        const adminCheck = currentUser.email === ADMIN_EMAIL;
+        setIsAdmin(adminCheck);
+        
+        // Charger les données de l'utilisateur
+        const userRef = ref(database, `users/${currentUser.email.replace(/\./g, '_')}`);
+        onValue(userRef, (snapshot) => {
+          const userData = snapshot.val();
+          
+          if (userData) {
+            // Vérifier si l'utilisateur est révoqué
+            if (userData.isRevoked) {
+              alert('Votre accès a été révoqué. Contactez l\'administrateur.');
+              signOut(auth);
+              return;
+            }
+            
+            setUserTeam(userData.teamId);
+            setShowTeamSelector(false);
+          } else {
+            // Utilisateur non enregistré, afficher le sélecteur de team
+            setShowTeamSelector(true);
+          }
+        });
+        
+        // Si admin, charger tous les utilisateurs
+        if (adminCheck) {
+          const usersRef = ref(database, 'users');
+          onValue(usersRef, (snapshot) => {
+            const usersData = snapshot.val();
+            setAllUsers(usersData || {});
+          });
+        }
+      } else {
+        setUserTeam(null);
+        setIsAdmin(false);
+        setShowTeamSelector(false);
+      }
     });
 
     const recipesRef = ref(database, 'recipes');
@@ -40,7 +96,13 @@ export default function RecipeManager() {
     const unsubscribeData = onValue(recipesRef, (snapshot) => {
       const data = snapshot.val();
       if (data) {
-        const recipesArray = Object.values(data);
+        const recipesArray = Object.values(data).map(recipe => {
+          // Si la recette n'a pas de teamId, lui assigner "thibaut-mathilde" par défaut
+          if (!recipe.teamId) {
+            return { ...recipe, teamId: 'thibaut-mathilde' };
+          }
+          return recipe;
+        });
         setRecipes(recipesArray);
         setSyncStatus('synced');
       } else {
@@ -67,6 +129,46 @@ export default function RecipeManager() {
     }
   };
 
+  const handleTeamSelection = async (teamId) => {
+    if (!user) return;
+    
+    try {
+      setSyncStatus('syncing');
+      const userRef = ref(database, `users/${user.email.replace(/\./g, '_')}`);
+      await set(userRef, {
+        email: user.email,
+        teamId: teamId,
+        name: user.displayName || user.email.split('@')[0],
+        isRevoked: false,
+        joinedAt: new Date().toISOString()
+      });
+      setUserTeam(teamId);
+      setShowTeamSelector(false);
+      setSyncStatus('synced');
+    } catch (error) {
+      console.error('Erreur lors de la sélection de team:', error);
+      alert('Erreur lors de la sélection de votre famille');
+      setSyncStatus('error');
+    }
+  };
+
+  const handleRevokeUser = async (userEmail) => {
+    if (!window.confirm(`Êtes-vous sûr de vouloir révoquer l'accès de ${userEmail} ?`)) return;
+    
+    try {
+      setSyncStatus('syncing');
+      const userRef = ref(database, `users/${userEmail.replace(/\./g, '_')}`);
+      const userData = allUsers[userEmail.replace(/\./g, '_')];
+      await set(userRef, { ...userData, isRevoked: true });
+      setSyncStatus('synced');
+      alert('Utilisateur révoqué avec succès');
+    } catch (error) {
+      console.error('Erreur lors de la révocation:', error);
+      alert('Erreur lors de la révocation');
+      setSyncStatus('error');
+    }
+  };
+
   const handleLogout = async () => {
     try {
       await signOut(auth);
@@ -78,6 +180,11 @@ export default function RecipeManager() {
   const saveRecipe = async () => {
     if (!user) {
       alert('Veuillez vous connecter pour ajouter une recette');
+      return;
+    }
+
+    if (!userTeam) {
+      alert('Veuillez sélectionner votre famille d\'abord');
       return;
     }
 
@@ -95,6 +202,7 @@ export default function RecipeManager() {
       steps: newRecipe.steps,
       image: newRecipe.image,
       tested: newRecipe.tested || false,
+      teamId: userTeam, // Ajouter automatiquement le teamId de l'utilisateur
       createdAt: editingRecipe?.createdAt || new Date().toISOString(),
       createdBy: user.email
     };
@@ -379,6 +487,11 @@ export default function RecipeManager() {
       if (!recipe.types.includes(filterType)) return false;
     }
     
+    // Filtre par team
+    if (filterTeam && recipe.teamId !== filterTeam) {
+      return false;
+    }
+    
     return true;
   });
 
@@ -400,6 +513,40 @@ export default function RecipeManager() {
       </div>
     );
   };
+
+  if (showTeamSelector && user) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-orange-50 to-red-50 flex items-center justify-center p-6">
+        <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full">
+          <div className="text-center mb-8">
+            <ChefHat className="w-16 h-16 text-orange-600 mx-auto mb-4" />
+            <h1 className="text-3xl font-bold text-gray-800 mb-2">Bienvenue !</h1>
+            <p className="text-gray-600">À quelle famille appartenez-vous ?</p>
+          </div>
+
+          <div className="space-y-3">
+            {Object.entries(TEAMS).map(([teamId, team]) => (
+              <button
+                key={teamId}
+                onClick={() => handleTeamSelection(teamId)}
+                className="w-full p-4 border-2 border-gray-200 rounded-xl hover:border-orange-500 hover:bg-orange-50 transition-all text-left font-semibold text-gray-800"
+                style={{ borderLeftWidth: '6px', borderLeftColor: team.color }}
+              >
+                {team.name}
+              </button>
+            ))}
+          </div>
+
+          <button
+            onClick={handleLogout}
+            className="mt-6 w-full text-gray-500 hover:text-gray-700 text-sm"
+          >
+            Se déconnecter
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (currentView === 'home') {
     return (
@@ -458,6 +605,16 @@ export default function RecipeManager() {
                 title="Liste de courses"
               >
                 <ShoppingCart className="w-7 h-7" />
+              </button>
+            )}
+
+            {isAdmin && !shoppingMode && (
+              <button
+                onClick={() => setCurrentView('admin')}
+                className="fixed bottom-6 left-6 bg-purple-600 text-white p-4 rounded-full hover:bg-purple-700 transition-all shadow-2xl hover:scale-110 z-50"
+                title="Administration"
+              >
+                ⚙️
               </button>
             )}
 
@@ -548,7 +705,21 @@ export default function RecipeManager() {
                 </select>
               </div>
 
-              {(searchQuery || filterType) && (
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-semibold text-gray-700 whitespace-nowrap">Famille :</span>
+                <select
+                  value={filterTeam}
+                  onChange={(e) => setFilterTeam(e.target.value)}
+                  className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-orange-500 focus:outline-none bg-white font-semibold"
+                >
+                  <option value="">Toutes les familles</option>
+                  {Object.entries(TEAMS).map(([teamId, team]) => (
+                    <option key={teamId} value={teamId}>{team.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {(searchQuery || filterType || filterTeam) && (
                 <div className="flex items-center gap-2 text-sm text-gray-600 flex-wrap">
                   <span className="font-semibold">Filtres actifs :</span>
                   {searchQuery && (
@@ -561,10 +732,16 @@ export default function RecipeManager() {
                       {filterType}
                     </span>
                   )}
+                  {filterTeam && (
+                    <span className="px-3 py-1 rounded-full text-white font-semibold" style={{ backgroundColor: TEAMS[filterTeam].color }}>
+                      {TEAMS[filterTeam].name}
+                    </span>
+                  )}
                   <button
                     onClick={() => {
                       setSearchQuery('');
                       setFilterType('');
+                      setFilterTeam('');
                     }}
                     className="text-red-600 hover:text-red-700 font-semibold"
                   >
@@ -614,7 +791,7 @@ export default function RecipeManager() {
                         />
                         {!recipe.tested && (
                           <div className="absolute top-2 left-2 bg-yellow-500 text-white px-2 py-1 rounded-lg text-xs font-bold shadow-lg">
-                            ⭐ À tester
+                            À tester
                           </div>
                         )}
                       </div>
@@ -623,10 +800,23 @@ export default function RecipeManager() {
                       {!recipe.image && !recipe.tested && (
                         <div className="mb-2">
                           <span className="inline-block bg-yellow-500 text-white px-2 py-1 rounded-lg text-xs font-bold">
-                            ⭐ À tester
+                            À tester
                           </span>
                         </div>
                       )}
+                      
+                      {/* Badge Team */}
+                      {recipe.teamId && TEAMS[recipe.teamId] && (
+                        <div className="mb-2">
+                          <span 
+                            className="inline-block text-white px-3 py-1 rounded-full text-xs font-bold"
+                            style={{ backgroundColor: TEAMS[recipe.teamId].color }}
+                          >
+                            {TEAMS[recipe.teamId].name}
+                          </span>
+                        </div>
+                      )}
+                      
                       <h3 className={`font-bold text-gray-800 mb-2 ${gridView === 'single' ? 'text-xl' : 'text-sm'}`}>{recipe.name}</h3>
                       
                       {recipe.servings && (
@@ -719,9 +909,20 @@ export default function RecipeManager() {
               <div className="flex flex-wrap gap-3 mb-6">
                 {!viewingRecipe.tested && (
                   <div className="bg-yellow-500 text-white px-4 py-2 rounded-xl font-bold shadow-lg">
-                    ⭐ À tester
+                    À tester
                   </div>
                 )}
+                
+                {/* Badge Team */}
+                {viewingRecipe.teamId && TEAMS[viewingRecipe.teamId] && (
+                  <div 
+                    className="text-white px-4 py-2 rounded-xl font-bold shadow-lg"
+                    style={{ backgroundColor: TEAMS[viewingRecipe.teamId].color }}
+                  >
+                    {TEAMS[viewingRecipe.teamId].name}
+                  </div>
+                )}
+                
                 {viewingRecipe.servings && (
                   <div className="flex items-center gap-2 bg-blue-50 px-4 py-2 rounded-xl">
                     <span className="text-blue-700 font-semibold">👥 {viewingRecipe.servings} personne{viewingRecipe.servings > 1 ? 's' : ''}</span>
@@ -996,6 +1197,83 @@ export default function RecipeManager() {
               >
                 Retour aux recettes
               </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Vue admin
+  if (currentView === 'admin' && isAdmin) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-orange-50 to-red-50">
+        <div className="max-w-6xl mx-auto p-6">
+          <div className="bg-white rounded-2xl shadow-xl p-8">
+            <div className="flex items-center justify-between mb-8">
+              <h2 className="text-3xl font-bold text-gray-800">⚙️ Administration</h2>
+              <button
+                onClick={() => setCurrentView('home')}
+                className="text-gray-600 hover:text-gray-800 px-4 py-2 rounded-lg hover:bg-gray-100"
+              >
+                ← Retour
+              </button>
+            </div>
+
+            <div className="mb-8">
+              <h3 className="text-xl font-bold text-gray-800 mb-4">Gestion des utilisateurs</h3>
+              
+              {Object.entries(TEAMS).map(([teamId, team]) => {
+                const teamUsers = Object.entries(allUsers).filter(([_, userData]) => userData.teamId === teamId);
+                
+                return (
+                  <div key={teamId} className="mb-6">
+                    <div 
+                      className="text-white px-4 py-2 rounded-xl font-bold mb-3 inline-block"
+                      style={{ backgroundColor: team.color }}
+                    >
+                      {team.name}
+                    </div>
+                    
+                    {teamUsers.length === 0 ? (
+                      <p className="text-gray-500 text-sm ml-4">Aucun utilisateur</p>
+                    ) : (
+                      <div className="space-y-2 ml-4">
+                        {teamUsers.map(([userKey, userData]) => (
+                          <div key={userKey} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                            <div>
+                              <p className="font-semibold text-gray-800">{userData.email}</p>
+                              <p className="text-xs text-gray-500">
+                                {userData.name} • Rejoint le {new Date(userData.joinedAt).toLocaleDateString('fr-FR')}
+                                {userData.isRevoked && <span className="text-red-600 font-bold ml-2">• RÉVOQUÉ</span>}
+                              </p>
+                            </div>
+                            {!userData.isRevoked && userData.email !== ADMIN_EMAIL && (
+                              <button
+                                onClick={() => handleRevokeUser(userData.email)}
+                                className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors text-sm font-semibold"
+                              >
+                                Révoquer
+                              </button>
+                            )}
+                            {userData.email === ADMIN_EMAIL && (
+                              <span className="bg-orange-100 text-orange-700 px-3 py-1 rounded-full text-xs font-bold">
+                                ADMIN
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4">
+              <p className="text-sm text-blue-800">
+                💡 <strong>Info :</strong> Les utilisateurs révoqués ne pourront plus se connecter. Leurs recettes restent visibles mais ne peuvent plus être modifiées par eux.
+              </p>
             </div>
           </div>
         </div>
