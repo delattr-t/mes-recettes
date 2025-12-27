@@ -142,24 +142,44 @@ export default function RecipeManager() {
   };
 
   const handleTeamSelection = async (teamId) => {
-    if (!user) return;
+    if (!user) {
+      console.error('Pas d\'utilisateur connecté');
+      return;
+    }
+    
+    console.log('Sélection de team pour:', user.email, '→', teamId);
     
     try {
       setSyncStatus('syncing');
-      const userRef = ref(database, `users/${user.email.replace(/\./g, '_')}`);
-      await set(userRef, {
+      
+      // Formater l'email pour Firebase (remplacer . par _)
+      const userKey = user.email.replace(/\./g, '_');
+      console.log('Clé utilisateur:', userKey);
+      
+      const userData = {
         email: user.email,
         teamId: teamId,
         name: user.displayName || user.email.split('@')[0],
         isRevoked: false,
         joinedAt: new Date().toISOString()
-      });
+      };
+      
+      console.log('Données à enregistrer:', userData);
+      
+      const userRef = ref(database, `users/${userKey}`);
+      await set(userRef, userData);
+      
+      console.log('✅ Team sélectionnée avec succès !');
+      
       setUserTeam(teamId);
       setShowTeamSelector(false);
       setSyncStatus('synced');
+      
+      alert(`Bienvenue dans ${TEAMS[teamId].name} ! 🎉`);
     } catch (error) {
-      console.error('Erreur lors de la sélection de team:', error);
-      alert('Erreur lors de la sélection de votre famille');
+      console.error('❌ Erreur lors de la sélection de team:', error);
+      console.error('Détails de l\'erreur:', error.message);
+      alert(`Erreur lors de la sélection de votre famille: ${error.message}`);
       setSyncStatus('error');
     }
   };
