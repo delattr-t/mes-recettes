@@ -11,5 +11,5 @@ root.render(
   </React.StrictMode>
 );
 
-// Enregistrer le service worker pour la PWA
-serviceWorkerRegistration.register();
+// // Enregistrer le service worker pour la PWA
+// serviceWorkerRegistration.register();
