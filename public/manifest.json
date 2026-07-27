@@ -1,19 +1,26 @@
 {
   "name": "Mes Recettes - Famille",
   "short_name": "Recettes",
-  "description": "Application de gestion de recettes familiales avec import Instagram",
+  "description": "Application de gestion de recettes familiales avec import vidéo",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#FFF7ED",
   "theme_color": "#EA580C",
   "orientation": "portrait-primary",
   "share_target": {
-    "action": "/",
-    "method": "GET",
+    "action": "/share-target",
+    "method": "POST",
+    "enctype": "multipart/form-data",
     "params": {
       "title": "title",
       "text": "text",
-      "url": "url"
+      "url": "url",
+      "files": [
+        {
+          "name": "video",
+          "accept": ["video/*"]
+        }
+      ]
     }
   },
   "icons": [
@@ -30,29 +37,5 @@
       "purpose": "any maskable"
     }
   ],
-  "screenshots": [
-    {
-      "src": "/screenshot1.png",
-      "sizes": "540x720",
-      "type": "image/png",
-      "form_factor": "narrow"
-    }
-  ],
-  "categories": ["food", "lifestyle"],
-  "shortcuts": [
-    {
-      "name": "Ajouter une recette",
-      "short_name": "Nouvelle recette",
-      "description": "Ajouter rapidement une nouvelle recette",
-      "url": "/?action=add",
-      "icons": [{ "src": "/icon-add.png", "sizes": "96x96" }]
-    },
-    {
-      "name": "Liste de courses",
-      "short_name": "Courses",
-      "description": "Créer une liste de courses",
-      "url": "/?action=shopping",
-      "icons": [{ "src": "/icon-cart.png", "sizes": "96x96" }]
-    }
-  ]
+  "categories": ["food", "lifestyle"]
 }
