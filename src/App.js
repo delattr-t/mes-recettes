@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, Search, ChefHat, Trash2, Edit2, Cloud, CloudOff, LogOut, LogIn, ShoppingCart } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Plus, Search, ChefHat, Trash2, Edit2, Cloud, CloudOff, LogOut, LogIn, ShoppingCart, Download, X } from 'lucide-react';
 import { database, auth, googleProvider } from './firebaseConfig';
 import { ref, set, onValue, remove } from 'firebase/database';
 import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
@@ -45,6 +45,97 @@ export default function RecipeManager() {
     image: '',
     tested: false
   });
+
+  // ===== Import de recettes depuis Instagram / Facebook =====
+  // importStatus : 'idle' | 'loading' | 'needCaption' | 'error'
+  const [importStatus, setImportStatus] = useState('idle');
+  const [importError, setImportError] = useState(null);
+  const [importPendingUrl, setImportPendingUrl] = useState(null);
+  const [captionInput, setCaptionInput] = useState('');
+
+  // Trouve un lien Instagram / Facebook dans un texte partagé
+  const extractLink = (text) => {
+    if (!text) return null;
+    const m = text.match(
+      /https?:\/\/(?:www\.)?(?:instagram\.com|facebook\.com|fb\.watch)\/\S+/i
+    );
+    return m ? m[0] : null;
+  };
+
+  // Pré-remplit le formulaire "Nouvelle recette" avec la recette analysée
+  const fillFormWithRecipe = useCallback((recipe) => {
+    setEditingRecipe(null);
+    setNewRecipe({
+      name: recipe.name || '',
+      servings: recipe.servings || '',
+      types: [],
+      ingredients: Array.isArray(recipe.ingredients)
+        ? recipe.ingredients.join('\n')
+        : (recipe.ingredients || ''),
+      steps: recipe.steps || '',
+      image: '',
+      tested: false
+    });
+    setCurrentView('add');
+  }, []);
+
+  // Appelle la fonction serverless /api/import-recipe
+  const callImportApi = useCallback(async (payload) => {
+    setImportStatus('loading');
+    setImportError(null);
+    try {
+      const res = await fetch('/api/import-recipe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+
+      if (data.recipe) {
+        setImportStatus('idle');
+        setCaptionInput('');
+        fillFormWithRecipe(data.recipe);
+      } else if (data.needCaption) {
+        setImportPendingUrl(data.sourceUrl || payload.url || null);
+        setImportStatus('needCaption');
+      } else {
+        throw new Error(data.error || 'Réponse inattendue du serveur');
+      }
+    } catch (e) {
+      setImportError(e.message);
+      setImportStatus('error');
+    }
+  }, [fillFormWithRecipe]);
+
+  // Lancé quand l'utilisateur colle un lien ou une légende (iPhone / manuel)
+  const importFromInput = useCallback((input) => {
+    if (!input || !input.trim()) return;
+    const link = extractLink(input);
+    if (link && input.trim() === link) {
+      callImportApi({ url: link });
+    } else {
+      callImportApi({ text: input, url: link || undefined });
+    }
+  }, [callImportApi]);
+
+  // Chemin Android : partage reçu via share_target (?url= ou ?text=)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const sharedUrl = params.get('url');
+    const sharedText = params.get('text');
+    const link = sharedUrl || extractLink(sharedText);
+
+    if (link || (sharedText && sharedText.length > 60)) {
+      // Nettoie l'URL pour éviter un ré-import au rafraîchissement
+      window.history.replaceState({}, '', window.location.pathname);
+      if (link) {
+        callImportApi({ url: link });
+      } else {
+        callImportApi({ text: sharedText });
+      }
+    }
+  }, [callImportApi]);
+  // ===== Fin import Instagram / Facebook =====
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
@@ -583,6 +674,82 @@ export default function RecipeManager() {
   if (currentView === 'home') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-orange-50 to-red-50">
+        {/* Overlay d'import Instagram / Facebook */}
+        {importStatus !== 'idle' && (
+          <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-md w-full">
+              {importStatus === 'loading' && (
+                <div className="text-center py-4">
+                  <div className="w-12 h-12 border-4 border-pink-200 border-t-pink-600 rounded-full animate-spin mx-auto mb-4"></div>
+                  <p className="text-lg font-semibold text-gray-800">Analyse de la recette…</p>
+                  <p className="text-sm text-gray-500 mt-1">L'IA lit le post et extrait les ingrédients</p>
+                </div>
+              )}
+
+              {importStatus === 'needCaption' && (
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-lg font-bold text-gray-800">Légende introuvable</h3>
+                    <button
+                      onClick={() => { setImportStatus('idle'); setCaptionInput(''); }}
+                      className="text-gray-400 hover:text-gray-600"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+                  <p className="text-sm text-gray-600 mb-3">
+                    Le post est peut-être privé. Ouvrez-le, copiez sa légende (le texte
+                    qui contient la recette) et collez-la ici :
+                  </p>
+                  <textarea
+                    value={captionInput}
+                    onChange={(e) => setCaptionInput(e.target.value)}
+                    rows={6}
+                    placeholder="Collez ici la légende du post…"
+                    className="w-full px-3 py-2 border-2 border-gray-200 rounded-xl focus:border-pink-500 focus:outline-none resize-none"
+                  />
+                  <div className="flex gap-2 mt-3">
+                    <button
+                      onClick={() => { setImportStatus('idle'); setCaptionInput(''); }}
+                      className="flex-1 bg-gray-200 text-gray-700 px-4 py-2 rounded-xl hover:bg-gray-300 font-semibold"
+                    >
+                      Annuler
+                    </button>
+                    <button
+                      onClick={() => callImportApi({ text: captionInput, url: importPendingUrl || undefined })}
+                      disabled={!captionInput.trim()}
+                      className="flex-1 bg-pink-600 text-white px-4 py-2 rounded-xl hover:bg-pink-700 font-semibold disabled:opacity-40"
+                    >
+                      Analyser
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {importStatus === 'error' && (
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-lg font-bold text-red-600">Erreur</h3>
+                    <button
+                      onClick={() => setImportStatus('idle')}
+                      className="text-gray-400 hover:text-gray-600"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+                  <p className="text-sm text-gray-600 mb-4">{importError}</p>
+                  <button
+                    onClick={() => setImportStatus('idle')}
+                    className="w-full bg-gray-200 text-gray-700 px-4 py-2 rounded-xl hover:bg-gray-300 font-semibold"
+                  >
+                    Fermer
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         <div className="max-w-6xl mx-auto p-6">
           <div className="bg-white rounded-2xl shadow-xl p-8">
             <div className="mb-8">
@@ -627,6 +794,21 @@ export default function RecipeManager() {
                 title="Ajouter une recette"
               >
                 <Plus className="w-7 h-7" />
+              </button>
+            )}
+
+            {user && !shoppingMode && (
+              <button
+                onClick={() => {
+                  const input = window.prompt(
+                    'Collez le lien Instagram / Facebook de la recette\n(ou collez directement la légende du post) :'
+                  );
+                  if (input) importFromInput(input);
+                }}
+                className="fixed bottom-24 right-6 bg-pink-600 text-white p-4 rounded-full hover:bg-pink-700 transition-all shadow-2xl hover:scale-110 z-50"
+                title="Importer depuis Instagram / Facebook"
+              >
+                <Download className="w-7 h-7" />
               </button>
             )}
 
