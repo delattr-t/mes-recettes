@@ -1,8 +1,76 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Plus, Search, ChefHat, Trash2, Edit2, Cloud, CloudOff, LogOut, LogIn, ShoppingCart, Download, X } from 'lucide-react';
 import { database, auth, googleProvider } from './firebaseConfig';
 import { ref, set, onValue, remove } from 'firebase/database';
 import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
+
+// ===== Extraction d'images depuis une vidéo (côté navigateur) =====
+// Se positionne à plusieurs instants de la vidéo et capture chaque image
+// dans un canvas, renvoyée en JPEG base64. Aucune donnée n'est envoyée
+// à Instagram : tout se passe sur le téléphone.
+function seekTo(video, time) {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      video.removeEventListener('seeked', finish);
+      resolve();
+    };
+    video.addEventListener('seeked', finish);
+    // Filet de sécurité si l'événement 'seeked' ne se déclenche pas
+    setTimeout(finish, 2500);
+    try { video.currentTime = time; } catch { finish(); }
+  });
+}
+
+function extractFramesFromVideo(file, frameCount = 8) {
+  return new Promise((resolve, reject) => {
+    const video = document.createElement('video');
+    video.preload = 'metadata';
+    video.muted = true;
+    video.playsInline = true;
+    const url = URL.createObjectURL(file);
+    video.src = url;
+
+    const fail = (msg) => {
+      URL.revokeObjectURL(url);
+      reject(new Error(msg));
+    };
+
+    video.onerror = () => fail("Impossible de lire cette vidéo sur le téléphone.");
+
+    video.onloadedmetadata = async () => {
+      try {
+        const duration = video.duration || 0;
+        if (!duration || !isFinite(duration)) {
+          return fail("Durée de la vidéo introuvable.");
+        }
+        const maxW = 768;
+        const scale = Math.min(1, maxW / (video.videoWidth || maxW));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round((video.videoWidth || maxW) * scale);
+        canvas.height = Math.round((video.videoHeight || maxW) * scale);
+        const ctx = canvas.getContext('2d');
+
+        const frames = [];
+        for (let i = 0; i < frameCount; i++) {
+          // Instants répartis sur la durée (on évite le tout début / la toute fin)
+          const t = (duration * (i + 0.5)) / frameCount;
+          await seekTo(video, t);
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+          frames.push(dataUrl.split(',')[1]);
+        }
+        URL.revokeObjectURL(url);
+        resolve(frames);
+      } catch (e) {
+        fail("Erreur pendant l'extraction des images : " + e.message);
+      }
+    };
+  });
+}
+// ===== Fin extraction vidéo =====
 
 export default function RecipeManager() {
   // Configuration des teams
@@ -52,6 +120,8 @@ export default function RecipeManager() {
   const [importError, setImportError] = useState(null);
   const [importPendingUrl, setImportPendingUrl] = useState(null);
   const [captionInput, setCaptionInput] = useState('');
+  const [importMessage, setImportMessage] = useState('');
+  const videoInputRef = useRef(null);
 
   // Trouve un lien Instagram / Facebook dans un texte partagé
   const extractLink = (text) => {
@@ -89,7 +159,32 @@ export default function RecipeManager() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      const data = await res.json();
+
+      // On lit d'abord en texte brut pour diagnostiquer les réponses non-JSON
+      const raw = await res.text();
+
+      if (!raw) {
+        throw new Error(
+          "Le serveur a répondu sans contenu (statut " + res.status + "). " +
+          "La fonction /api/import-recipe est peut-être absente ou en erreur. " +
+          "Vérifiez qu'elle est bien déployée et que la clé API est configurée sur Vercel."
+        );
+      }
+
+      let data;
+      try {
+        data = JSON.parse(raw);
+      } catch {
+        // Réponse non-JSON (page 404 HTML de Vercel, message d'erreur brut, etc.)
+        const apercu = raw.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160);
+        throw new Error(
+          "Réponse inattendue du serveur (statut " + res.status + ") : " + apercu
+        );
+      }
+
+      if (!res.ok) {
+        throw new Error(data.error || ("Erreur serveur (statut " + res.status + ")"));
+      }
 
       if (data.recipe) {
         setImportStatus('idle');
@@ -107,6 +202,25 @@ export default function RecipeManager() {
     }
   }, [fillFormWithRecipe]);
 
+  // Analyse une vidéo : extrait les images puis les envoie à l'IA vision
+  const importFromVideo = useCallback(async (file) => {
+    if (!file) return;
+    setImportStatus('loading');
+    setImportMessage('Extraction des images de la vidéo…');
+    setImportError(null);
+    try {
+      const frames = await extractFramesFromVideo(file, 8);
+      if (!frames.length) throw new Error("Aucune image n'a pu être extraite.");
+      setImportMessage("Analyse de la recette par l'IA…");
+      await callImportApi({ images: frames });
+    } catch (e) {
+      setImportError(e.message);
+      setImportStatus('error');
+    } finally {
+      setImportMessage('');
+    }
+  }, [callImportApi]);
+
   // Lancé quand l'utilisateur colle un lien ou une légende (iPhone / manuel)
   const importFromInput = useCallback((input) => {
     if (!input || !input.trim()) return;
@@ -118,15 +232,38 @@ export default function RecipeManager() {
     }
   }, [callImportApi]);
 
-  // Chemin Android : partage reçu via share_target (?url= ou ?text=)
+  // Chemin Android : partage reçu (vidéo depuis la galerie, ou lien/texte)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+
+    // 1) Vidéo partagée depuis la galerie (via le service worker)
+    if (params.get('shared') === 'video') {
+      window.history.replaceState({}, '', window.location.pathname);
+      (async () => {
+        try {
+          const cache = await caches.open('shared-media');
+          const resp = await cache.match('/shared-video');
+          if (resp) {
+            const blob = await resp.blob();
+            await cache.delete('/shared-video');
+            const file = new File([blob], 'partage.mp4', {
+              type: blob.type || 'video/mp4',
+            });
+            importFromVideo(file);
+          }
+        } catch (e) {
+          setImportError("Vidéo partagée introuvable : " + e.message);
+          setImportStatus('error');
+        }
+      })();
+      return;
+    }
+
+    // 2) Lien ou texte partagé
     const sharedUrl = params.get('url');
     const sharedText = params.get('text');
     const link = sharedUrl || extractLink(sharedText);
-
     if (link || (sharedText && sharedText.length > 60)) {
-      // Nettoie l'URL pour éviter un ré-import au rafraîchissement
       window.history.replaceState({}, '', window.location.pathname);
       if (link) {
         callImportApi({ url: link });
@@ -134,7 +271,16 @@ export default function RecipeManager() {
         callImportApi({ text: sharedText });
       }
     }
-  }, [callImportApi]);
+  }, [callImportApi, importFromVideo]);
+  // Enregistre le service worker qui reçoit les vidéos partagées (Android)
+  useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/share-sw.js').catch(() => {
+        // Sans service worker, le partage de vidéo depuis la galerie ne
+        // fonctionnera pas, mais le bouton "Choisir une vidéo" reste opérationnel.
+      });
+    }
+  }, []);
   // ===== Fin import Instagram / Facebook =====
 
   useEffect(() => {
@@ -681,15 +827,17 @@ export default function RecipeManager() {
               {importStatus === 'loading' && (
                 <div className="text-center py-4">
                   <div className="w-12 h-12 border-4 border-pink-200 border-t-pink-600 rounded-full animate-spin mx-auto mb-4"></div>
-                  <p className="text-lg font-semibold text-gray-800">Analyse de la recette…</p>
-                  <p className="text-sm text-gray-500 mt-1">L'IA lit le post et extrait les ingrédients</p>
+                  <p className="text-lg font-semibold text-gray-800">
+                    {importMessage || 'Analyse de la recette…'}
+                  </p>
+                  <p className="text-sm text-gray-500 mt-1">Cela prend quelques secondes</p>
                 </div>
               )}
 
               {importStatus === 'needCaption' && (
                 <div>
                   <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-lg font-bold text-gray-800">Légende introuvable</h3>
+                    <h3 className="text-lg font-bold text-gray-800">Recette non détectée</h3>
                     <button
                       onClick={() => { setImportStatus('idle'); setCaptionInput(''); }}
                       className="text-gray-400 hover:text-gray-600"
@@ -698,8 +846,9 @@ export default function RecipeManager() {
                     </button>
                   </div>
                   <p className="text-sm text-gray-600 mb-3">
-                    Le post est peut-être privé. Ouvrez-le, copiez sa légende (le texte
-                    qui contient la recette) et collez-la ici :
+                    L'IA n'a pas trouvé de recette lisible (peu de texte à l'écran dans
+                    la vidéo, ou post privé). Vous pouvez coller ici la légende ou la
+                    recette écrite :
                   </p>
                   <textarea
                     value={captionInput}
@@ -798,18 +947,26 @@ export default function RecipeManager() {
             )}
 
             {user && !shoppingMode && (
-              <button
-                onClick={() => {
-                  const input = window.prompt(
-                    'Collez le lien Instagram / Facebook de la recette\n(ou collez directement la légende du post) :'
-                  );
-                  if (input) importFromInput(input);
-                }}
-                className="fixed bottom-24 right-6 bg-pink-600 text-white p-4 rounded-full hover:bg-pink-700 transition-all shadow-2xl hover:scale-110 z-50"
-                title="Importer depuis Instagram / Facebook"
-              >
-                <Download className="w-7 h-7" />
-              </button>
+              <>
+                <input
+                  ref={videoInputRef}
+                  type="file"
+                  accept="video/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) importFromVideo(file);
+                    e.target.value = ''; // permet de re-sélectionner la même vidéo
+                  }}
+                />
+                <button
+                  onClick={() => videoInputRef.current?.click()}
+                  className="fixed bottom-24 right-6 bg-pink-600 text-white p-4 rounded-full hover:bg-pink-700 transition-all shadow-2xl hover:scale-110 z-50"
+                  title="Importer une vidéo de recette"
+                >
+                  <Download className="w-7 h-7" />
+                </button>
+              </>
             )}
 
             {!shoppingMode && (
