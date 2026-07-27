@@ -221,17 +221,6 @@ export default function RecipeManager() {
     }
   }, [callImportApi]);
 
-  // Lancé quand l'utilisateur colle un lien ou une légende (iPhone / manuel)
-  const importFromInput = useCallback((input) => {
-    if (!input || !input.trim()) return;
-    const link = extractLink(input);
-    if (link && input.trim() === link) {
-      callImportApi({ url: link });
-    } else {
-      callImportApi({ text: input, url: link || undefined });
-    }
-  }, [callImportApi]);
-
   // Chemin Android : partage reçu (vidéo depuis la galerie, ou lien/texte)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -1602,8 +1591,7 @@ export default function RecipeManager() {
                 </div>
               ) : (
                 Object.entries(TEAMS).map(([teamId, team]) => {
-                  const teamUsers = Object.entries(allUsers).filter(([userKey, userData]) => {
-                    // userKey est déjà formaté avec underscores depuis Firebase
+                  const teamUsers = Object.entries(allUsers).filter(([, userData]) => {
                     return userData && userData.teamId === teamId;
                   });
                   
