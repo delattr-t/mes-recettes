@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, Search, Sprout, Leaf, Trash2, Edit2, Cloud, CloudOff, LogOut, LogIn, ShoppingCart, Users, SlidersHorizontal } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Plus, Search, Sprout, Leaf, Trash2, Edit2, Cloud, CloudOff, LogOut, LogIn, ShoppingCart, Users, SlidersHorizontal, Bell, X } from 'lucide-react';
 import { database, auth, googleProvider } from './firebaseConfig';
 import { ref, set, onValue, remove } from 'firebase/database';
 import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
@@ -34,6 +34,15 @@ export default function RecipeManager() {
   const [filterType, setFilterType] = useState('');
   const [filterTeam, setFilterTeam] = useState(''); // Nouveau filtre team
   const [showFilters, setShowFilters] = useState(false);
+
+  // Notifications de nouvelles recettes
+  const [toast, setToast] = useState(null);
+  const [notifPermission, setNotifPermission] = useState(
+    typeof Notification !== 'undefined' ? Notification.permission : 'unsupported'
+  );
+  const knownRecipeIds = useRef(null);   // null tant que le premier chargement n'a pas eu lieu
+  const currentUserEmail = useRef(null); // évite une valeur périmée dans l'écouteur Firebase
+  const toastTimer = useRef(null);
   const [syncStatus, setSyncStatus] = useState('connecting');
   const [user, setUser] = useState(null);
   const [userTeam, setUserTeam] = useState(null); // Team de l'utilisateur
@@ -67,6 +76,7 @@ export default function RecipeManager() {
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
+      currentUserEmail.current = currentUser ? currentUser.email : null;
       
       if (currentUser) {
         // Vérifier si l'utilisateur est admin
@@ -133,9 +143,28 @@ export default function RecipeManager() {
           }
           return recipe;
         });
+
+        // Repérer les recettes apparues depuis le dernier instantané
+        const ids = new Set(recipesArray.map(r => r.id));
+        if (knownRecipeIds.current === null) {
+          // Premier chargement : on mémorise sans notifier
+          knownRecipeIds.current = ids;
+        } else {
+          const nouvelles = recipesArray.filter(r =>
+            !knownRecipeIds.current.has(r.id) &&
+            r.createdBy &&
+            r.createdBy !== currentUserEmail.current
+          );
+          knownRecipeIds.current = ids;
+          if (nouvelles.length > 0) {
+            annoncerRecette(nouvelles[nouvelles.length - 1]);
+          }
+        }
+
         setRecipes(recipesArray);
         setSyncStatus('synced');
       } else {
+        knownRecipeIds.current = new Set();
         setRecipes([]);
         setSyncStatus('synced');
       }
@@ -149,6 +178,50 @@ export default function RecipeManager() {
       unsubscribeData();
     };
   }, []);
+
+  const LOGO = '/web-app-manifest-192x192.png';
+
+  // Compose le message et déclenche bannière + notification système
+  const annoncerRecette = (recipe) => {
+    const team = TEAMS[recipe.teamId];
+    const auteur = team ? team.name : 'Quelqu\'un';
+    const titre = `${auteur} ${team ? 'ont' : 'a'} ajouté une nouvelle recette !`;
+
+    setToast({ recipe, titre, color: team ? team.color : C.stem });
+
+    clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(null), 8000);
+
+    // Notification système : ne part que si l'utilisateur l'a autorisée
+    if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+      try {
+        const notif = new Notification(titre, {
+          body: `${recipe.name}\nÀ découvrir dans Recettes de famille`,
+          icon: LOGO,
+          badge: LOGO,
+          tag: `recette-${recipe.id}`
+        });
+        notif.onclick = () => {
+          window.focus();
+          notif.close();
+        };
+      } catch (e) {
+        console.warn('Notification indisponible :', e);
+      }
+    }
+  };
+
+  const demanderNotifications = async () => {
+    if (typeof Notification === 'undefined') return;
+    const perm = await Notification.requestPermission();
+    setNotifPermission(perm);
+    if (perm === 'granted') {
+      new Notification('C\'est noté !', {
+        body: 'Vous serez prévenu à chaque nouvelle recette de la famille.',
+        icon: LOGO
+      });
+    }
+  };
 
   const handleLogin = async () => {
     try {
@@ -794,6 +867,17 @@ export default function RecipeManager() {
                          style={{ backgroundColor: userTeam && TEAMS[userTeam] ? TEAMS[userTeam].color : C.stem }}>
                       {firstName.charAt(0).toUpperCase()}
                     </div>
+                    {notifPermission === 'default' && (
+                      <button
+                        onClick={demanderNotifications}
+                        className="w-9 h-9 rounded-full flex items-center justify-center transition-colors hover:bg-black/5 shrink-0"
+                        style={{ color: C.sage, border: `1px solid ${C.line}` }}
+                        title="Être prévenu des nouvelles recettes"
+                        aria-label="Activer les notifications"
+                      >
+                        <Bell className="w-4 h-4" />
+                      </button>
+                    )}
                     <button
                       onClick={handleLogout}
                       className="w-9 h-9 rounded-full flex items-center justify-center transition-colors hover:bg-black/5 shrink-0"
@@ -816,6 +900,51 @@ export default function RecipeManager() {
                 )}
               </div>
             </div>
+
+            {/* Bannière : nouvelle recette d'un autre foyer */}
+            {toast && (
+              <div
+                className="fixed top-4 left-1/2 -translate-x-1/2 z-[60] w-[calc(100%-2rem)] max-w-md rounded-2xl bg-white overflow-hidden cursor-pointer"
+                style={{
+                  border: `1px solid ${C.line}`,
+                  boxShadow: '0 18px 40px -14px rgba(16,36,26,.45)',
+                  animation: 'toastIn .35s cubic-bezier(.2,.8,.3,1)'
+                }}
+                onClick={() => {
+                  viewRecipe(toast.recipe);
+                  setToast(null);
+                }}
+              >
+                <div className="h-1" style={{ backgroundColor: toast.color }} />
+                <div className="flex items-center gap-3 p-3.5">
+                  <img
+                    src={LOGO}
+                    alt=""
+                    className="w-11 h-11 rounded-xl shrink-0"
+                    style={{ border: `1px solid ${C.line}` }}
+                    onError={(e) => { e.target.style.display = 'none'; }}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[13px] font-semibold leading-snug" style={{ color: C.ink }}>
+                      {toast.titre}
+                    </p>
+                    <p className="text-[15px] leading-snug truncate mt-0.5"
+                       style={{ color: toast.color, fontFamily: "'Fraunces', Georgia, serif", fontWeight: 600 }}>
+                      {toast.recipe.name}
+                    </p>
+                    <p className="text-[11px] mt-1" style={{ color: C.sage }}>Appuyez pour la découvrir</p>
+                  </div>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setToast(null); }}
+                    className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 hover:bg-black/5"
+                    style={{ color: C.sage }}
+                    aria-label="Fermer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Boutons Flottants */}
             {user && !shoppingMode && (
