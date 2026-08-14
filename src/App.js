@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Search, Sprout, Leaf, Trash2, Edit2, Cloud, CloudOff, LogOut, LogIn, ShoppingCart, Users } from 'lucide-react';
+import { database, auth, googleProvider } from './firebaseConfig';
+import { ref, set, onValue, remove } from 'firebase/database';
+import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
 
 // Palette "Potager"
 const C = {
@@ -10,9 +13,6 @@ const C = {
   sage: '#7B8A6F',     // texte secondaire
   line: '#DDE3D2'      // filets et bordures
 };
-import { database, auth, googleProvider } from './firebaseConfig';
-import { ref, set, onValue, remove } from 'firebase/database';
-import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
 
 export default function RecipeManager() {
   // Configuration des teams
