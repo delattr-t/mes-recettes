@@ -33,7 +33,6 @@ export default function RecipeManager() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState('');
   const [filterTeam, setFilterTeam] = useState(''); // Nouveau filtre team
-  const [gridView, setGridView] = useState('single');
   const [showFilters, setShowFilters] = useState(false);
   const [syncStatus, setSyncStatus] = useState('connecting');
   const [user, setUser] = useState(null);
@@ -931,25 +930,6 @@ export default function RecipeManager() {
                     )}
                   </button>
                 )}
-                {!shoppingMode && (
-                  <button
-                    onClick={() => setGridView(gridView === 'single' ? 'double' : 'single')}
-                    className="px-3.5 rounded-xl transition-colors shrink-0"
-                    style={{ backgroundColor: C.linen, border: `1px solid ${C.line}`, color: C.sage }}
-                    title={gridView === 'single' ? 'Deux colonnes' : 'Une colonne'}
-                    aria-label={gridView === 'single' ? 'Passer en deux colonnes' : 'Passer en une colonne'}
-                  >
-                    {gridView === 'single' ? (
-                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                        <rect x="3" y="5" width="8" height="14" rx="1.5" /><rect x="13" y="5" width="8" height="14" rx="1.5" />
-                      </svg>
-                    ) : (
-                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                        <rect x="3" y="4" width="18" height="5" rx="1.5" /><rect x="3" y="12" width="18" height="5" rx="1.5" />
-                      </svg>
-                    )}
-                  </button>
-                )}
               </div>
 
               {/* Panneau de filtres rétractable */}
@@ -1070,7 +1050,7 @@ export default function RecipeManager() {
                 </p>
               </div>
             ) : (
-              <div className={gridView === 'single' ? 'flex flex-col gap-2' : 'grid grid-cols-1 md:grid-cols-2 gap-2'}>
+              <div className="flex flex-col gap-2.5">
                 {filteredRecipes.map((recipe) => {
                   const teamColor = (recipe.teamId && TEAMS[recipe.teamId]) ? TEAMS[recipe.teamId].color : C.stem;
                   const selected = selectedRecipes.includes(recipe.id);
@@ -1105,7 +1085,7 @@ export default function RecipeManager() {
 
                     {/* Bannière photo */}
                     <div
-                      className="flex-none w-[72px] sm:w-[88px] flex items-center justify-center overflow-hidden"
+                      className="flex-none w-[104px] sm:w-[128px] flex items-center justify-center overflow-hidden"
                       style={{ backgroundColor: recipe.image ? C.linen : '#EDF1E4', borderRight: `1px solid ${C.line}` }}
                     >
                       {recipe.image ? (
@@ -1116,22 +1096,22 @@ export default function RecipeManager() {
                           onError={(e) => { e.target.style.display = 'none'; }}
                         />
                       ) : (
-                        <Leaf className="w-5 h-5 opacity-40" style={{ color: C.stem }} />
+                        <Leaf className="w-7 h-7 opacity-40" style={{ color: C.stem }} />
                       )}
                     </div>
 
-                    <div className="flex-1 min-w-0 px-3 py-2.5 sm:px-4 sm:py-3 flex flex-col justify-center">
+                    <div className="flex-1 min-w-0 px-4 py-3.5 sm:px-5 sm:py-4 flex flex-col justify-center">
                       {recipe.teamId && TEAMS[recipe.teamId] && (
-                        <p className="text-[9px] sm:text-[10px] uppercase tracking-[0.14em] font-semibold mb-0.5 truncate"
+                        <p className="text-[10px] sm:text-[11px] uppercase tracking-[0.14em] font-semibold mb-1 truncate"
                            style={{ color: teamColor }}>
                           {TEAMS[recipe.teamId].name}
                         </p>
                       )}
-                      <h3 className="text-[14px] sm:text-[17px] leading-snug mb-1 truncate"
+                      <h3 className="text-[17px] sm:text-[21px] leading-snug mb-1.5"
                           style={{ color: C.ink, fontFamily: "'Fraunces', Georgia, serif", fontWeight: 600 }}>
                         {recipe.name}
                       </h3>
-                      <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] sm:text-xs"
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[12px] sm:text-[13px]"
                            style={{ color: C.sage }}>
                         {recipe.servings && <span>👥 {recipe.servings}</span>}
                         {recipe.types && recipe.types.slice(0, 2).map((type, idx) => (
