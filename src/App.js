@@ -684,6 +684,11 @@ export default function RecipeManager() {
     };
   };
 
+  // Prénom affiché dans l'en-tête
+  const firstName = user
+    ? (user.displayName ? user.displayName.split(' ')[0] : user.email.split('@')[0])
+    : '';
+
   const filteredRecipes = recipes.filter(recipe => {
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
@@ -764,38 +769,49 @@ export default function RecipeManager() {
       <div className="min-h-screen" style={{ backgroundColor: C.linen }}>
         <div className="max-w-6xl mx-auto p-4 sm:p-6">
           <div className="bg-white rounded-2xl p-5 sm:p-8" style={{ boxShadow: '0 1px 2px rgba(16,36,26,.06), 0 12px 32px -18px rgba(16,36,26,.35)' }}>
-            <div className="mb-8">
+            <div className="mb-6">
               <div className="flex items-center gap-3 pb-5 mb-5" style={{ borderBottom: `1px solid ${C.line}` }}>
                 <div className="flex items-center justify-center w-11 h-11 rounded-full shrink-0" style={{ backgroundColor: C.sprout }}>
                   <Sprout className="w-6 h-6" style={{ color: C.ink }} />
                 </div>
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <p className="text-[11px] uppercase tracking-[0.18em] font-semibold" style={{ color: C.sage }}>Cuisine végétarienne</p>
                   <h1 className="text-2xl sm:text-3xl leading-tight" style={{ color: C.ink, fontFamily: "'Fraunces', Georgia, serif", fontWeight: 600 }}>Le carnet de la famille</h1>
                   <SyncIndicator />
                 </div>
-              </div>
-              
-              <div className="flex flex-col gap-3 max-w-md mx-auto">
+
                 {user ? (
-                  <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-center">
-                    <p className="text-sm text-gray-600">Connecté en tant que</p>
-                    <p className="text-sm font-semibold text-gray-800">{user.email}</p>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <div className="hidden sm:block text-right">
+                      <p className="text-sm font-semibold leading-tight" style={{ color: C.ink }}>{firstName}</p>
+                      {userTeam && TEAMS[userTeam] && (
+                        <p className="text-[10px] uppercase tracking-[0.12em] font-semibold" style={{ color: TEAMS[userTeam].color }}>
+                          {TEAMS[userTeam].name}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex items-center justify-center w-9 h-9 rounded-full text-white text-sm font-semibold shrink-0"
+                         style={{ backgroundColor: userTeam && TEAMS[userTeam] ? TEAMS[userTeam].color : C.stem }}>
+                      {firstName.charAt(0).toUpperCase()}
+                    </div>
                     <button
                       onClick={handleLogout}
-                      className="mt-2 w-full flex items-center justify-center gap-2 bg-gray-600 text-white px-4 py-2 rounded-xl hover:bg-gray-700 transition-colors"
+                      className="w-9 h-9 rounded-full flex items-center justify-center transition-colors hover:bg-black/5 shrink-0"
+                      style={{ color: C.sage, border: `1px solid ${C.line}` }}
+                      title="Se déconnecter"
+                      aria-label="Se déconnecter"
                     >
                       <LogOut className="w-4 h-4" />
-                      Se déconnecter
                     </button>
                   </div>
                 ) : (
                   <button
                     onClick={handleLogin}
-                    className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700 transition-colors shadow-lg"
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-full text-white text-sm font-semibold transition-opacity hover:opacity-90 shrink-0"
+                    style={{ backgroundColor: C.stem }}
                   >
-                    <LogIn className="w-5 h-5" />
-                    Se connecter
+                    <LogIn className="w-4 h-4" />
+                    <span className="hidden sm:inline">Se connecter</span>
                   </button>
                 )}
               </div>
@@ -874,97 +890,122 @@ export default function RecipeManager() {
               </div>
             )}
 
-            <div className="mb-6 space-y-3">
-              <div className="flex gap-3">
+            <div className="mb-6 space-y-4">
+              <div className="flex gap-2">
                 <div className="flex-1 relative">
-                  <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-[18px] h-[18px]" style={{ color: C.sage }} />
                   <input
                     type="text"
-                    placeholder="Rechercher par nom ou ingrédient..."
+                    placeholder="Rechercher par nom ou ingrédient…"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-12 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:border-orange-500 focus:outline-none"
+                    className="w-full pl-11 pr-4 py-3 rounded-xl outline-none text-[15px] transition-colors focus:bg-white"
+                    style={{ backgroundColor: C.linen, border: `1px solid ${C.line}`, color: C.ink }}
+                    onFocus={(e) => { e.target.style.borderColor = C.stem; }}
+                    onBlur={(e) => { e.target.style.borderColor = C.line; }}
                   />
                 </div>
                 {!shoppingMode && (
                   <button
                     onClick={() => setGridView(gridView === 'single' ? 'double' : 'single')}
-                    className="px-4 py-3 border-2 border-gray-200 rounded-xl hover:border-orange-500 transition-colors bg-white"
-                    title={gridView === 'single' ? '2 colonnes' : '1 colonne'}
+                    className="px-3.5 rounded-xl transition-colors shrink-0"
+                    style={{ backgroundColor: C.linen, border: `1px solid ${C.line}`, color: C.sage }}
+                    title={gridView === 'single' ? 'Deux colonnes' : 'Une colonne'}
+                    aria-label={gridView === 'single' ? 'Passer en deux colonnes' : 'Passer en une colonne'}
                   >
                     {gridView === 'single' ? (
-                      <svg className="w-5 h-5 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                        <rect x="3" y="5" width="8" height="14" rx="1.5" /><rect x="13" y="5" width="8" height="14" rx="1.5" />
                       </svg>
                     ) : (
-                      <svg className="w-5 h-5 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                        <rect x="3" y="4" width="18" height="5" rx="1.5" /><rect x="3" y="12" width="18" height="5" rx="1.5" />
                       </svg>
                     )}
                   </button>
                 )}
               </div>
-              
-              <div className="flex items-center gap-3">
-                <span className="text-sm font-semibold text-gray-700 whitespace-nowrap">Filtrer par :</span>
-                <select
-                  value={filterType}
-                  onChange={(e) => setFilterType(e.target.value)}
-                  className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-orange-500 focus:outline-none bg-white font-semibold"
-                >
-                  <option value="">Tous les types</option>
-                  <option value="Entrée">Entrée</option>
-                  <option value="Plat">Plat</option>
-                  <option value="Dessert">Dessert</option>
-                  <option value="Petit-déjeuner">Petit-déjeuner</option>
-                  <option value="Goûter">Goûter</option>
-                </select>
+
+              {/* Types : pastilles */}
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.16em] font-semibold mb-2" style={{ color: C.sage }}>Type</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {['', 'Entrée', 'Plat', 'Dessert', 'Petit-déjeuner', 'Goûter'].map((type) => {
+                    const active = filterType === type;
+                    return (
+                      <button
+                        key={type || 'tous'}
+                        onClick={() => setFilterType(type)}
+                        className="px-3 py-1.5 rounded-full text-[13px] font-medium transition-all"
+                        style={{
+                          backgroundColor: active ? C.ink : 'transparent',
+                          color: active ? '#fff' : C.sage,
+                          border: `1px solid ${active ? C.ink : C.line}`
+                        }}
+                      >
+                        {type || 'Tout'}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
-              <div className="flex items-center gap-3">
-                <span className="text-sm font-semibold text-gray-700 whitespace-nowrap">Famille :</span>
-                <select
-                  value={filterTeam}
-                  onChange={(e) => setFilterTeam(e.target.value)}
-                  className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-orange-500 focus:outline-none bg-white font-semibold"
-                >
-                  <option value="">Toutes les familles</option>
-                  {Object.entries(TEAMS).map(([teamId, team]) => (
-                    <option key={teamId} value={teamId}>{team.name}</option>
-                  ))}
-                </select>
+              {/* Foyers : pastilles teintées */}
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.16em] font-semibold mb-2" style={{ color: C.sage }}>Foyer</p>
+                <div className="flex flex-wrap gap-1.5">
+                  <button
+                    onClick={() => setFilterTeam('')}
+                    className="px-3 py-1.5 rounded-full text-[13px] font-medium transition-all"
+                    style={{
+                      backgroundColor: filterTeam === '' ? C.ink : 'transparent',
+                      color: filterTeam === '' ? '#fff' : C.sage,
+                      border: `1px solid ${filterTeam === '' ? C.ink : C.line}`
+                    }}
+                  >
+                    Tous
+                  </button>
+                  {Object.entries(TEAMS).map(([teamId, team]) => {
+                    const active = filterTeam === teamId;
+                    return (
+                      <button
+                        key={teamId}
+                        onClick={() => setFilterTeam(active ? '' : teamId)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-medium transition-all"
+                        style={{
+                          backgroundColor: active ? team.color : 'transparent',
+                          color: active ? '#fff' : C.sage,
+                          border: `1px solid ${active ? team.color : C.line}`
+                        }}
+                      >
+                        <span className="w-2 h-2 rounded-full shrink-0"
+                              style={{ backgroundColor: active ? 'rgba(255,255,255,.85)' : team.color }} />
+                        {team.name}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
-              {(searchQuery || filterType || filterTeam) && (
-                <div className="flex items-center gap-2 text-sm text-gray-600 flex-wrap">
-                  <span className="font-semibold">Filtres actifs :</span>
-                  {searchQuery && (
-                    <span className="px-3 py-1 bg-orange-100 text-orange-700 rounded-full">
-                      "{searchQuery}"
-                    </span>
-                  )}
-                  {filterType && (
-                    <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full">
-                      {filterType}
-                    </span>
-                  )}
-                  {filterTeam && (
-                    <span className="px-3 py-1 rounded-full text-white font-semibold" style={{ backgroundColor: TEAMS[filterTeam].color }}>
-                      {TEAMS[filterTeam].name}
-                    </span>
-                  )}
+              <div className="flex items-center justify-between gap-3 pt-1 text-xs" style={{ color: C.sage }}>
+                <span>
+                  {filteredRecipes.length} recette{filteredRecipes.length > 1 ? 's' : ''}
+                  {(searchQuery || filterType || filterTeam) ? ' trouvée' + (filteredRecipes.length > 1 ? 's' : '') : ''}
+                </span>
+                {(searchQuery || filterType || filterTeam) && (
                   <button
                     onClick={() => {
                       setSearchQuery('');
                       setFilterType('');
                       setFilterTeam('');
                     }}
-                    className="text-red-600 hover:text-red-700 font-semibold"
+                    className="font-semibold underline underline-offset-2 hover:opacity-70"
+                    style={{ color: C.stem }}
                   >
-                    ✕ Effacer
+                    Effacer les filtres
                   </button>
-                </div>
-              )}
+                )}
+              </div>
             </div>
 
             {filteredRecipes.length === 0 ? (
