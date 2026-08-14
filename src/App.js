@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Sprout, Leaf, Trash2, Edit2, Cloud, CloudOff, LogOut, LogIn, ShoppingCart, Users } from 'lucide-react';
+import { Plus, Search, Sprout, Leaf, Trash2, Edit2, Cloud, CloudOff, LogOut, LogIn, ShoppingCart, Users, SlidersHorizontal } from 'lucide-react';
 import { database, auth, googleProvider } from './firebaseConfig';
 import { ref, set, onValue, remove } from 'firebase/database';
 import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
@@ -34,6 +34,7 @@ export default function RecipeManager() {
   const [filterType, setFilterType] = useState('');
   const [filterTeam, setFilterTeam] = useState(''); // Nouveau filtre team
   const [gridView, setGridView] = useState('single');
+  const [showFilters, setShowFilters] = useState(false);
   const [syncStatus, setSyncStatus] = useState('connecting');
   const [user, setUser] = useState(null);
   const [userTeam, setUserTeam] = useState(null); // Team de l'utilisateur
@@ -684,6 +685,9 @@ export default function RecipeManager() {
     };
   };
 
+  // Nombre de filtres actifs (hors recherche texte)
+  const activeFilterCount = (filterType ? 1 : 0) + (filterTeam ? 1 : 0);
+
   // Prénom affiché dans l'en-tête
   const firstName = user
     ? (user.displayName ? user.displayName.split(' ')[0] : user.email.split('@')[0])
@@ -907,6 +911,28 @@ export default function RecipeManager() {
                 </div>
                 {!shoppingMode && (
                   <button
+                    onClick={() => setShowFilters(!showFilters)}
+                    className="flex items-center gap-1.5 px-3.5 rounded-xl transition-colors shrink-0 text-[13px] font-medium"
+                    style={{
+                      backgroundColor: activeFilterCount > 0 ? C.ink : C.linen,
+                      border: `1px solid ${activeFilterCount > 0 ? C.ink : C.line}`,
+                      color: activeFilterCount > 0 ? '#fff' : C.sage
+                    }}
+                    aria-expanded={showFilters}
+                    title="Filtres"
+                  >
+                    <SlidersHorizontal className="w-[18px] h-[18px]" />
+                    <span className="hidden sm:inline">Filtres</span>
+                    {activeFilterCount > 0 && (
+                      <span className="flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold"
+                            style={{ backgroundColor: C.sprout, color: C.ink }}>
+                        {activeFilterCount}
+                      </span>
+                    )}
+                  </button>
+                )}
+                {!shoppingMode && (
+                  <button
                     onClick={() => setGridView(gridView === 'single' ? 'double' : 'single')}
                     className="px-3.5 rounded-xl transition-colors shrink-0"
                     style={{ backgroundColor: C.linen, border: `1px solid ${C.line}`, color: C.sage }}
@@ -926,66 +952,89 @@ export default function RecipeManager() {
                 )}
               </div>
 
-              {/* Types : pastilles */}
-              <div>
-                <p className="text-[10px] uppercase tracking-[0.16em] font-semibold mb-2" style={{ color: C.sage }}>Type</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {['', 'Entrée', 'Plat', 'Dessert', 'Petit-déjeuner', 'Goûter'].map((type) => {
-                    const active = filterType === type;
-                    return (
+              {/* Panneau de filtres rétractable */}
+              {showFilters && (
+                <div className="space-y-4 p-4 rounded-xl" style={{ backgroundColor: C.linen, border: `1px solid ${C.line}` }}>
+                  {/* Types : pastilles */}
+                  <div>
+                    <p className="text-[10px] uppercase tracking-[0.16em] font-semibold mb-2" style={{ color: C.sage }}>Type</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {['', 'Entrée', 'Plat', 'Dessert', 'Petit-déjeuner', 'Goûter'].map((type) => {
+                        const active = filterType === type;
+                        return (
+                          <button
+                            key={type || 'tous'}
+                            onClick={() => setFilterType(type)}
+                            className="px-3 py-1.5 rounded-full text-[13px] font-medium transition-all"
+                            style={{
+                              backgroundColor: active ? C.ink : '#fff',
+                              color: active ? '#fff' : C.sage,
+                              border: `1px solid ${active ? C.ink : C.line}`
+                            }}
+                          >
+                            {type || 'Tout'}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Foyers : pastilles teintées */}
+                  <div>
+                    <p className="text-[10px] uppercase tracking-[0.16em] font-semibold mb-2" style={{ color: C.sage }}>Foyer</p>
+                    <div className="flex flex-wrap gap-1.5">
                       <button
-                        key={type || 'tous'}
-                        onClick={() => setFilterType(type)}
+                        onClick={() => setFilterTeam('')}
                         className="px-3 py-1.5 rounded-full text-[13px] font-medium transition-all"
                         style={{
-                          backgroundColor: active ? C.ink : 'transparent',
-                          color: active ? '#fff' : C.sage,
-                          border: `1px solid ${active ? C.ink : C.line}`
+                          backgroundColor: filterTeam === '' ? C.ink : '#fff',
+                          color: filterTeam === '' ? '#fff' : C.sage,
+                          border: `1px solid ${filterTeam === '' ? C.ink : C.line}`
                         }}
                       >
-                        {type || 'Tout'}
+                        Tous
                       </button>
-                    );
-                  })}
+                      {Object.entries(TEAMS).map(([teamId, team]) => {
+                        const active = filterTeam === teamId;
+                        return (
+                          <button
+                            key={teamId}
+                            onClick={() => setFilterTeam(active ? '' : teamId)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-medium transition-all"
+                            style={{
+                              backgroundColor: active ? team.color : '#fff',
+                              color: active ? '#fff' : C.sage,
+                              border: `1px solid ${active ? team.color : C.line}`
+                            }}
+                          >
+                            <span className="w-2 h-2 rounded-full shrink-0"
+                                  style={{ backgroundColor: active ? 'rgba(255,255,255,.85)' : team.color }} />
+                            {team.name}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
-              </div>
+              )}
 
-              {/* Foyers : pastilles teintées */}
-              <div>
-                <p className="text-[10px] uppercase tracking-[0.16em] font-semibold mb-2" style={{ color: C.sage }}>Foyer</p>
-                <div className="flex flex-wrap gap-1.5">
-                  <button
-                    onClick={() => setFilterTeam('')}
-                    className="px-3 py-1.5 rounded-full text-[13px] font-medium transition-all"
-                    style={{
-                      backgroundColor: filterTeam === '' ? C.ink : 'transparent',
-                      color: filterTeam === '' ? '#fff' : C.sage,
-                      border: `1px solid ${filterTeam === '' ? C.ink : C.line}`
-                    }}
-                  >
-                    Tous
-                  </button>
-                  {Object.entries(TEAMS).map(([teamId, team]) => {
-                    const active = filterTeam === teamId;
-                    return (
-                      <button
-                        key={teamId}
-                        onClick={() => setFilterTeam(active ? '' : teamId)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-medium transition-all"
-                        style={{
-                          backgroundColor: active ? team.color : 'transparent',
-                          color: active ? '#fff' : C.sage,
-                          border: `1px solid ${active ? team.color : C.line}`
-                        }}
-                      >
-                        <span className="w-2 h-2 rounded-full shrink-0"
-                              style={{ backgroundColor: active ? 'rgba(255,255,255,.85)' : team.color }} />
-                        {team.name}
-                      </button>
-                    );
-                  })}
+              {/* Rappel discret quand le panneau est replié */}
+              {!showFilters && activeFilterCount > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {filterType && (
+                    <span className="px-2.5 py-1 rounded-full text-[12px] font-medium"
+                          style={{ backgroundColor: C.linen, color: C.ink, border: `1px solid ${C.line}` }}>
+                      {filterType}
+                    </span>
+                  )}
+                  {filterTeam && TEAMS[filterTeam] && (
+                    <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[12px] font-medium text-white"
+                          style={{ backgroundColor: TEAMS[filterTeam].color }}>
+                      {TEAMS[filterTeam].name}
+                    </span>
+                  )}
                 </div>
-              </div>
+              )}
 
               <div className="flex items-center justify-between gap-3 pt-1 text-xs" style={{ color: C.sage }}>
                 <span>
