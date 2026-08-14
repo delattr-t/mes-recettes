@@ -774,12 +774,9 @@ export default function RecipeManager() {
           <div className="bg-white rounded-2xl p-5 sm:p-8" style={{ boxShadow: '0 1px 2px rgba(16,36,26,.06), 0 12px 32px -18px rgba(16,36,26,.35)' }}>
             <div className="mb-6">
               <div className="flex items-center gap-3 pb-5 mb-5" style={{ borderBottom: `1px solid ${C.line}` }}>
-                <div className="flex items-center justify-center w-11 h-11 rounded-full shrink-0" style={{ backgroundColor: C.sprout }}>
-                  <Sprout className="w-6 h-6" style={{ color: C.ink }} />
-                </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-[11px] uppercase tracking-[0.18em] font-semibold" style={{ color: C.sage }}>Cuisine végétarienne</p>
-                  <h1 className="text-2xl sm:text-3xl leading-tight" style={{ color: C.ink, fontFamily: "'Fraunces', Georgia, serif", fontWeight: 600 }}>Le carnet de la famille</h1>
+                  <h1 className="text-2xl sm:text-3xl leading-tight" style={{ color: C.ink, fontFamily: "'Fraunces', Georgia, serif", fontWeight: 600 }}>Recettes de famille</h1>
                   <SyncIndicator />
                 </div>
 
@@ -1041,7 +1038,7 @@ export default function RecipeManager() {
               <div className="text-center py-20">
                 <Sprout className="w-14 h-14 mx-auto mb-4" style={{ color: C.line }} />
                 <p className="text-lg" style={{ color: C.ink, fontFamily: "'Fraunces', Georgia, serif" }}>
-                  {searchQuery || filterType || filterTeam ? 'Rien ne pousse ici' : 'Le carnet est vide'}
+                  {searchQuery || filterType || filterTeam ? 'Rien ne pousse ici' : 'Aucune recette pour l\'instant'}
                 </p>
                 <p className="text-sm mt-1" style={{ color: C.sage }}>
                   {searchQuery || filterType || filterTeam
