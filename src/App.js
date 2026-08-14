@@ -1,84 +1,26 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Plus, Search, ChefHat, Trash2, Edit2, Cloud, CloudOff, LogOut, LogIn, ShoppingCart, Download, X } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Plus, Search, Sprout, Leaf, Trash2, Edit2, Cloud, CloudOff, LogOut, LogIn, ShoppingCart, Users } from 'lucide-react';
+
+// Palette "Potager"
+const C = {
+  ink: '#10241A',      // kale profond — titres
+  stem: '#2F6B45',     // vert tige — primaire
+  sprout: '#B7D14A',   // jeune pousse — accent
+  linen: '#F3F5EC',    // fond
+  sage: '#7B8A6F',     // texte secondaire
+  line: '#DDE3D2'      // filets et bordures
+};
 import { database, auth, googleProvider } from './firebaseConfig';
 import { ref, set, onValue, remove } from 'firebase/database';
 import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
 
-// ===== Extraction d'images depuis une vidéo (côté navigateur) =====
-// Se positionne à plusieurs instants de la vidéo et capture chaque image
-// dans un canvas, renvoyée en JPEG base64. Aucune donnée n'est envoyée
-// à Instagram : tout se passe sur le téléphone.
-function seekTo(video, time) {
-  return new Promise((resolve) => {
-    let done = false;
-    const finish = () => {
-      if (done) return;
-      done = true;
-      video.removeEventListener('seeked', finish);
-      resolve();
-    };
-    video.addEventListener('seeked', finish);
-    // Filet de sécurité si l'événement 'seeked' ne se déclenche pas
-    setTimeout(finish, 2500);
-    try { video.currentTime = time; } catch { finish(); }
-  });
-}
-
-function extractFramesFromVideo(file, frameCount = 8) {
-  return new Promise((resolve, reject) => {
-    const video = document.createElement('video');
-    video.preload = 'metadata';
-    video.muted = true;
-    video.playsInline = true;
-    const url = URL.createObjectURL(file);
-    video.src = url;
-
-    const fail = (msg) => {
-      URL.revokeObjectURL(url);
-      reject(new Error(msg));
-    };
-
-    video.onerror = () => fail("Impossible de lire cette vidéo sur le téléphone.");
-
-    video.onloadedmetadata = async () => {
-      try {
-        const duration = video.duration || 0;
-        if (!duration || !isFinite(duration)) {
-          return fail("Durée de la vidéo introuvable.");
-        }
-        const maxW = 768;
-        const scale = Math.min(1, maxW / (video.videoWidth || maxW));
-        const canvas = document.createElement('canvas');
-        canvas.width = Math.round((video.videoWidth || maxW) * scale);
-        canvas.height = Math.round((video.videoHeight || maxW) * scale);
-        const ctx = canvas.getContext('2d');
-
-        const frames = [];
-        for (let i = 0; i < frameCount; i++) {
-          // Instants répartis sur la durée (on évite le tout début / la toute fin)
-          const t = (duration * (i + 0.5)) / frameCount;
-          await seekTo(video, t);
-          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-          const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
-          frames.push(dataUrl.split(',')[1]);
-        }
-        URL.revokeObjectURL(url);
-        resolve(frames);
-      } catch (e) {
-        fail("Erreur pendant l'extraction des images : " + e.message);
-      }
-    };
-  });
-}
-// ===== Fin extraction vidéo =====
-
 export default function RecipeManager() {
   // Configuration des teams
   const TEAMS = {
-    'papa-maman': { name: 'Papa & Maman', color: '#3B82F6' },
-    'camille-maxime': { name: 'Camille & Maxime', color: '#10B981' },
-    'florent-maniola': { name: 'Florent & Maniola', color: '#F59E0B' },
-    'thibaut-mathilde': { name: 'Thibaut & Mathilde', color: '#8B5CF6' }
+    'papa-maman': { name: 'Papa & Maman', color: '#6B3A62' },        // aubergine
+    'camille-maxime': { name: 'Camille & Maxime', color: '#C0503A' }, // tomate
+    'florent-maniola': { name: 'Florent & Maniola', color: '#C98A2E' },// courge
+    'thibaut-mathilde': { name: 'Thibaut & Mathilde', color: '#3E7D52' }// kale
   };
 
   // Email de l'administrateur
@@ -114,163 +56,13 @@ export default function RecipeManager() {
     tested: false
   });
 
-  // ===== Import de recettes depuis Instagram / Facebook =====
-  // importStatus : 'idle' | 'loading' | 'needCaption' | 'error'
-  const [importStatus, setImportStatus] = useState('idle');
-  const [importError, setImportError] = useState(null);
-  const [importPendingUrl, setImportPendingUrl] = useState(null);
-  const [captionInput, setCaptionInput] = useState('');
-  const [importMessage, setImportMessage] = useState('');
-  const videoInputRef = useRef(null);
-
-  // Trouve un lien Instagram / Facebook dans un texte partagé
-  const extractLink = (text) => {
-    if (!text) return null;
-    const m = text.match(
-      /https?:\/\/(?:www\.)?(?:instagram\.com|facebook\.com|fb\.watch)\/\S+/i
-    );
-    return m ? m[0] : null;
-  };
-
-  // Pré-remplit le formulaire "Nouvelle recette" avec la recette analysée
-  const fillFormWithRecipe = useCallback((recipe) => {
-    setEditingRecipe(null);
-    setNewRecipe({
-      name: recipe.name || '',
-      servings: recipe.servings || '',
-      types: [],
-      ingredients: Array.isArray(recipe.ingredients)
-        ? recipe.ingredients.join('\n')
-        : (recipe.ingredients || ''),
-      steps: recipe.steps || '',
-      image: '',
-      tested: false
-    });
-    setCurrentView('add');
-  }, []);
-
-  // Appelle la fonction serverless /api/import-recipe
-  const callImportApi = useCallback(async (payload) => {
-    setImportStatus('loading');
-    setImportError(null);
-    try {
-      const res = await fetch('/api/import-recipe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      // On lit d'abord en texte brut pour diagnostiquer les réponses non-JSON
-      const raw = await res.text();
-
-      if (!raw) {
-        throw new Error(
-          "Le serveur a répondu sans contenu (statut " + res.status + "). " +
-          "La fonction /api/import-recipe est peut-être absente ou en erreur. " +
-          "Vérifiez qu'elle est bien déployée et que la clé API est configurée sur Vercel."
-        );
-      }
-
-      let data;
-      try {
-        data = JSON.parse(raw);
-      } catch {
-        // Réponse non-JSON (page 404 HTML de Vercel, message d'erreur brut, etc.)
-        const apercu = raw.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160);
-        throw new Error(
-          "Réponse inattendue du serveur (statut " + res.status + ") : " + apercu
-        );
-      }
-
-      if (!res.ok) {
-        throw new Error(data.error || ("Erreur serveur (statut " + res.status + ")"));
-      }
-
-      if (data.recipe) {
-        setImportStatus('idle');
-        setCaptionInput('');
-        fillFormWithRecipe(data.recipe);
-      } else if (data.needCaption) {
-        setImportPendingUrl(data.sourceUrl || payload.url || null);
-        setImportStatus('needCaption');
-      } else {
-        throw new Error(data.error || 'Réponse inattendue du serveur');
-      }
-    } catch (e) {
-      setImportError(e.message);
-      setImportStatus('error');
-    }
-  }, [fillFormWithRecipe]);
-
-  // Analyse une vidéo : extrait les images puis les envoie à l'IA vision
-  const importFromVideo = useCallback(async (file) => {
-    if (!file) return;
-    setImportStatus('loading');
-    setImportMessage('Extraction des images de la vidéo…');
-    setImportError(null);
-    try {
-      const frames = await extractFramesFromVideo(file, 8);
-      if (!frames.length) throw new Error("Aucune image n'a pu être extraite.");
-      setImportMessage("Analyse de la recette par l'IA…");
-      await callImportApi({ images: frames });
-    } catch (e) {
-      setImportError(e.message);
-      setImportStatus('error');
-    } finally {
-      setImportMessage('');
-    }
-  }, [callImportApi]);
-
-  // Chemin Android : partage reçu (vidéo depuis la galerie, ou lien/texte)
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-
-    // 1) Vidéo partagée depuis la galerie (via le service worker)
-    if (params.get('shared') === 'video') {
-      window.history.replaceState({}, '', window.location.pathname);
-      (async () => {
-        try {
-          const cache = await caches.open('shared-media');
-          const resp = await cache.match('/shared-video');
-          if (resp) {
-            const blob = await resp.blob();
-            await cache.delete('/shared-video');
-            const file = new File([blob], 'partage.mp4', {
-              type: blob.type || 'video/mp4',
-            });
-            importFromVideo(file);
-          }
-        } catch (e) {
-          setImportError("Vidéo partagée introuvable : " + e.message);
-          setImportStatus('error');
-        }
-      })();
-      return;
-    }
-
-    // 2) Lien ou texte partagé
-    const sharedUrl = params.get('url');
-    const sharedText = params.get('text');
-    const link = sharedUrl || extractLink(sharedText);
-    if (link || (sharedText && sharedText.length > 60)) {
-      window.history.replaceState({}, '', window.location.pathname);
-      if (link) {
-        callImportApi({ url: link });
-      } else {
-        callImportApi({ text: sharedText });
-      }
-    }
-  }, [callImportApi, importFromVideo]);
-  // Enregistre le service worker qui reçoit les vidéos partagées (Android)
-  useEffect(() => {
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/share-sw.js').catch(() => {
-        // Sans service worker, le partage de vidéo depuis la galerie ne
-        // fonctionnera pas, mais le bouton "Choisir une vidéo" reste opérationnel.
-      });
-    }
-  }, []);
-  // ===== Fin import Instagram / Facebook =====
+  // États pour l'import hybride
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importMethod, setImportMethod] = useState(null); // 'image', 'text', 'video', 'manual'
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [importText, setImportText] = useState('');
+  const [importImage, setImportImage] = useState(null);
+  const [importVideo, setImportVideo] = useState(null);
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
@@ -618,6 +410,167 @@ export default function RecipeManager() {
     setShoppingMode(false);
   };
 
+  // Fonction pour analyser une image avec l'IA Claude
+  const analyzeImage = async (imageBase64) => {
+    try {
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 2000,
+          messages: [
+            {
+              role: "user",
+              content: [
+                {
+                  type: "image",
+                  source: {
+                    type: "base64",
+                    media_type: "image/jpeg",
+                    data: imageBase64.split(',')[1]
+                  }
+                },
+                {
+                  type: "text",
+                  text: `Analyse cette image de recette et extrait les informations suivantes en JSON :
+                  {
+                    "name": "nom de la recette",
+                    "servings": "nombre de personnes (juste le chiffre)",
+                    "ingredients": ["liste", "des", "ingrédients"],
+                    "steps": "étapes de préparation complètes"
+                  }
+                  
+                  Si certaines informations ne sont pas visibles, mets des chaînes vides ou tableaux vides.
+                  Réponds UNIQUEMENT avec le JSON, sans texte avant ou après.`
+                }
+              ]
+            }
+          ]
+        })
+      });
+
+      const data = await response.json();
+      const jsonText = data.content[0].text.replace(/```json\n?|```/g, '').trim();
+      return JSON.parse(jsonText);
+    } catch (error) {
+      console.error('Erreur analyse image:', error);
+      throw error;
+    }
+  };
+
+  // Fonction pour analyser du texte (copier-coller)
+  const analyzeText = (text) => {
+    const result = {
+      name: '',
+      servings: '',
+      ingredients: [],
+      steps: ''
+    };
+
+    // Extraire le nom (première ligne ou titre)
+    const lines = text.split('\n').filter(l => l.trim());
+    if (lines.length > 0) {
+      result.name = lines[0].replace(/^#+\s*/, '').trim();
+    }
+
+    // Extraire le nombre de personnes
+    const servingsMatch = text.match(/(\d+)\s*(?:personnes?|parts?|portions?|p\b)/i);
+    if (servingsMatch) {
+      result.servings = servingsMatch[1];
+    }
+
+    // Extraire les ingrédients (lignes avec -, •, *, ou chiffres)
+    const ingredientLines = text.split('\n').filter(line => {
+      const trimmed = line.trim();
+      return trimmed.match(/^[-•*]\s*\w/) || 
+             trimmed.match(/^\d+[g|ml|cl|kg|l]\s/) ||
+             (trimmed.includes('g ') || trimmed.includes('ml ') || trimmed.includes('cl '));
+    });
+    
+    if (ingredientLines.length > 0) {
+      result.ingredients = ingredientLines.map(line => 
+        line.trim().replace(/^[-•*]\s*/, '')
+      );
+    }
+
+    // Extraire les étapes (le reste après les ingrédients)
+    const stepsSection = text.split(/(?:préparation|instructions|étapes|recette):/i);
+    if (stepsSection.length > 1) {
+      result.steps = stepsSection[1].trim();
+    } else {
+      // Si pas de section clairement identifiée, prendre tout sauf les ingrédients
+      const allText = text.split('\n').filter(line => {
+        const trimmed = line.trim();
+        return !trimmed.match(/^[-•*]\s*\w/) && 
+               !trimmed.match(/^\d+[g|ml|cl|kg|l]\s/) &&
+               trimmed.length > 20; // Lignes substantielles
+      }).join('\n');
+      result.steps = allText;
+    }
+
+    return result;
+  };
+
+  // Fonction pour analyser une vidéo (nécessite API Claude avec vidéo)
+  const analyzeVideo = async (videoFile, descriptionText) => {
+    try {
+      // Note: Cette fonctionnalité nécessiterait l'upload de la vidéo vers un service
+      // Pour l'instant, on va juste parser la description fournie
+      alert('⚠️ Analyse vidéo : Pour l\'instant, veuillez coller la description de la vidéo dans le champ texte.');
+      return analyzeText(descriptionText);
+    } catch (error) {
+      console.error('Erreur analyse vidéo:', error);
+      throw error;
+    }
+  };
+
+  // Fonction pour gérer l'import selon la méthode choisie
+  const handleImport = async () => {
+    setIsAnalyzing(true);
+    
+    try {
+      let result = null;
+
+      if (importMethod === 'image' && importImage) {
+        result = await analyzeImage(importImage);
+      } else if (importMethod === 'text' && importText) {
+        result = analyzeText(importText);
+      } else if (importMethod === 'video' && importVideo) {
+        result = await analyzeVideo(importVideo, importText);
+      } else {
+        alert('Veuillez fournir les données nécessaires');
+        setIsAnalyzing(false);
+        return;
+      }
+
+      // Pré-remplir le formulaire avec les résultats
+      setNewRecipe({
+        ...newRecipe,
+        name: result.name || newRecipe.name,
+        servings: result.servings || newRecipe.servings,
+        ingredients: Array.isArray(result.ingredients) 
+          ? result.ingredients.join('\n') 
+          : result.ingredients || newRecipe.ingredients,
+        steps: result.steps || newRecipe.steps,
+        image: importMethod === 'image' ? importImage : newRecipe.image
+      });
+
+      // Fermer le modal et aller au formulaire
+      setShowImportModal(false);
+      setCurrentView('add');
+      
+      alert('✅ Analyse terminée ! Vérifiez et complétez les informations.');
+    } catch (error) {
+      console.error('Erreur import:', error);
+      alert('❌ Erreur lors de l\'analyse. Veuillez réessayer ou utiliser la saisie manuelle.');
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
   // Fonction pour compresser et redimensionner une image
   const compressImage = (file) => {
     return new Promise((resolve, reject) => {
@@ -777,7 +730,7 @@ export default function RecipeManager() {
       <div className="min-h-screen bg-gradient-to-br from-orange-50 to-red-50 flex items-center justify-center p-6">
         <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full">
           <div className="text-center mb-8">
-            <ChefHat className="w-16 h-16 text-orange-600 mx-auto mb-4" />
+            <Sprout className="w-16 h-16 mx-auto mb-4" style={{ color: C.stem }} />
             <h1 className="text-3xl font-bold text-gray-800 mb-2">Bienvenue !</h1>
             <p className="text-gray-600">À quelle famille appartenez-vous ?</p>
           </div>
@@ -808,93 +761,17 @@ export default function RecipeManager() {
 
   if (currentView === 'home') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-orange-50 to-red-50">
-        {/* Overlay d'import Instagram / Facebook */}
-        {importStatus !== 'idle' && (
-          <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-md w-full">
-              {importStatus === 'loading' && (
-                <div className="text-center py-4">
-                  <div className="w-12 h-12 border-4 border-pink-200 border-t-pink-600 rounded-full animate-spin mx-auto mb-4"></div>
-                  <p className="text-lg font-semibold text-gray-800">
-                    {importMessage || 'Analyse de la recette…'}
-                  </p>
-                  <p className="text-sm text-gray-500 mt-1">Cela prend quelques secondes</p>
-                </div>
-              )}
-
-              {importStatus === 'needCaption' && (
-                <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-lg font-bold text-gray-800">Recette non détectée</h3>
-                    <button
-                      onClick={() => { setImportStatus('idle'); setCaptionInput(''); }}
-                      className="text-gray-400 hover:text-gray-600"
-                    >
-                      <X className="w-5 h-5" />
-                    </button>
-                  </div>
-                  <p className="text-sm text-gray-600 mb-3">
-                    L'IA n'a pas trouvé de recette lisible (peu de texte à l'écran dans
-                    la vidéo, ou post privé). Vous pouvez coller ici la légende ou la
-                    recette écrite :
-                  </p>
-                  <textarea
-                    value={captionInput}
-                    onChange={(e) => setCaptionInput(e.target.value)}
-                    rows={6}
-                    placeholder="Collez ici la légende du post…"
-                    className="w-full px-3 py-2 border-2 border-gray-200 rounded-xl focus:border-pink-500 focus:outline-none resize-none"
-                  />
-                  <div className="flex gap-2 mt-3">
-                    <button
-                      onClick={() => { setImportStatus('idle'); setCaptionInput(''); }}
-                      className="flex-1 bg-gray-200 text-gray-700 px-4 py-2 rounded-xl hover:bg-gray-300 font-semibold"
-                    >
-                      Annuler
-                    </button>
-                    <button
-                      onClick={() => callImportApi({ text: captionInput, url: importPendingUrl || undefined })}
-                      disabled={!captionInput.trim()}
-                      className="flex-1 bg-pink-600 text-white px-4 py-2 rounded-xl hover:bg-pink-700 font-semibold disabled:opacity-40"
-                    >
-                      Analyser
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {importStatus === 'error' && (
-                <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-lg font-bold text-red-600">Erreur</h3>
-                    <button
-                      onClick={() => setImportStatus('idle')}
-                      className="text-gray-400 hover:text-gray-600"
-                    >
-                      <X className="w-5 h-5" />
-                    </button>
-                  </div>
-                  <p className="text-sm text-gray-600 mb-4">{importError}</p>
-                  <button
-                    onClick={() => setImportStatus('idle')}
-                    className="w-full bg-gray-200 text-gray-700 px-4 py-2 rounded-xl hover:bg-gray-300 font-semibold"
-                  >
-                    Fermer
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        <div className="max-w-6xl mx-auto p-6">
-          <div className="bg-white rounded-2xl shadow-xl p-8">
+      <div className="min-h-screen" style={{ backgroundColor: C.linen }}>
+        <div className="max-w-6xl mx-auto p-4 sm:p-6">
+          <div className="bg-white rounded-2xl p-5 sm:p-8" style={{ boxShadow: '0 1px 2px rgba(16,36,26,.06), 0 12px 32px -18px rgba(16,36,26,.35)' }}>
             <div className="mb-8">
-              <div className="flex items-center justify-center gap-3 mb-4">
-                <ChefHat className="w-10 h-10 text-orange-600" />
-                <div className="text-center">
-                  <h1 className="text-3xl font-bold text-gray-800">Mes Recettes</h1>
+              <div className="flex items-center gap-3 pb-5 mb-5" style={{ borderBottom: `1px solid ${C.line}` }}>
+                <div className="flex items-center justify-center w-11 h-11 rounded-full shrink-0" style={{ backgroundColor: C.sprout }}>
+                  <Sprout className="w-6 h-6" style={{ color: C.ink }} />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[11px] uppercase tracking-[0.18em] font-semibold" style={{ color: C.sage }}>Cuisine végétarienne</p>
+                  <h1 className="text-2xl sm:text-3xl leading-tight" style={{ color: C.ink, fontFamily: "'Fraunces', Georgia, serif", fontWeight: 600 }}>Le carnet de la famille</h1>
                   <SyncIndicator />
                 </div>
               </div>
@@ -927,41 +804,20 @@ export default function RecipeManager() {
             {/* Boutons Flottants */}
             {user && !shoppingMode && (
               <button
-                onClick={() => setCurrentView('add')}
-                className="fixed bottom-6 right-6 bg-orange-600 text-white p-4 rounded-full hover:bg-orange-700 transition-all shadow-2xl hover:scale-110 z-50"
+                onClick={() => setShowImportModal(true)}
+                className="fixed bottom-6 right-6 text-white p-4 rounded-full transition-all shadow-2xl hover:scale-110 z-50"
+                style={{ backgroundColor: C.stem }}
                 title="Ajouter une recette"
               >
                 <Plus className="w-7 h-7" />
               </button>
             )}
 
-            {user && !shoppingMode && (
-              <>
-                <input
-                  ref={videoInputRef}
-                  type="file"
-                  accept="video/*"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) importFromVideo(file);
-                    e.target.value = ''; // permet de re-sélectionner la même vidéo
-                  }}
-                />
-                <button
-                  onClick={() => videoInputRef.current?.click()}
-                  className="fixed bottom-24 right-6 bg-pink-600 text-white p-4 rounded-full hover:bg-pink-700 transition-all shadow-2xl hover:scale-110 z-50"
-                  title="Importer une vidéo de recette"
-                >
-                  <Download className="w-7 h-7" />
-                </button>
-              </>
-            )}
-
             {!shoppingMode && (
               <button
                 onClick={startShoppingMode}
-                className="fixed bottom-6 right-24 bg-green-600 text-white p-4 rounded-full hover:bg-green-700 transition-all shadow-2xl hover:scale-110 z-50"
+                className="fixed bottom-6 right-24 text-white p-4 rounded-full transition-all shadow-2xl hover:scale-110 z-50"
+                style={{ backgroundColor: C.ink }}
                 title="Liste de courses"
               >
                 <ShoppingCart className="w-7 h-7" />
@@ -1112,135 +968,369 @@ export default function RecipeManager() {
             </div>
 
             {filteredRecipes.length === 0 ? (
-              <div className="text-center py-16">
-                <ChefHat className="w-20 h-20 text-gray-300 mx-auto mb-4" />
-                <p className="text-gray-500 text-lg">
-                  {searchQuery ? 'Aucune recette trouvée' : 'Aucune recette enregistrée. Commencez par en ajouter une !'}
+              <div className="text-center py-20">
+                <Sprout className="w-14 h-14 mx-auto mb-4" style={{ color: C.line }} />
+                <p className="text-lg" style={{ color: C.ink, fontFamily: "'Fraunces', Georgia, serif" }}>
+                  {searchQuery || filterType || filterTeam ? 'Rien ne pousse ici' : 'Le carnet est vide'}
+                </p>
+                <p className="text-sm mt-1" style={{ color: C.sage }}>
+                  {searchQuery || filterType || filterTeam
+                    ? 'Essayez avec moins de filtres.'
+                    : 'Ajoutez la première recette avec le bouton +.'}
                 </p>
               </div>
             ) : (
-              <div className={`grid gap-4 ${gridView === 'single' ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3' : 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4'}`}>
-                {filteredRecipes.map((recipe) => (
-                  <div 
-                    key={recipe.id} 
+              <div className={gridView === 'single' ? 'flex flex-col gap-2' : 'grid grid-cols-1 md:grid-cols-2 gap-2'}>
+                {filteredRecipes.map((recipe) => {
+                  const teamColor = (recipe.teamId && TEAMS[recipe.teamId]) ? TEAMS[recipe.teamId].color : C.stem;
+                  const selected = selectedRecipes.includes(recipe.id);
+                  return (
+                  <div
+                    key={recipe.id}
                     onClick={() => !shoppingMode && viewRecipe(recipe)}
-                    className={`bg-white rounded-xl overflow-hidden shadow-md hover:shadow-xl transition-all relative ${
+                    className={`group relative flex items-stretch bg-white rounded-lg overflow-hidden transition-all ${
                       shoppingMode ? 'cursor-default' : 'cursor-pointer'
-                    } ${selectedRecipes.includes(recipe.id) ? 'ring-4 ring-green-500' : ''}`}
+                    }`}
+                    style={{
+                      border: `1px solid ${selected ? C.stem : C.line}`,
+                      boxShadow: selected ? `0 0 0 3px ${C.sprout}` : '0 1px 2px rgba(16,36,26,.04)'
+                    }}
                   >
+                    {/* Tige : filet vertical + nœud, dans la couleur du foyer */}
+                    <div className="absolute left-0 top-0 bottom-0 w-[3px] z-10" style={{ backgroundColor: teamColor }} />
+                    <div className="absolute left-[-3px] top-3 w-[9px] h-[9px] rounded-full z-20 ring-2 ring-white" style={{ backgroundColor: teamColor }} />
+
                     {shoppingMode && (
-                      <div className="absolute top-2 right-2 z-10">
+                      <div className="flex items-center pl-4 pr-1 z-20">
                         <input
                           type="checkbox"
-                          checked={selectedRecipes.includes(recipe.id)}
+                          checked={selected}
                           onChange={() => toggleRecipeSelection(recipe.id)}
-                          className="w-6 h-6 text-green-600 border-2 border-gray-300 rounded focus:ring-green-500"
                           onClick={(e) => e.stopPropagation()}
+                          className="w-5 h-5 rounded"
+                          style={{ accentColor: C.stem }}
                         />
                       </div>
                     )}
-                    {recipe.image && (
-                      <div className={`overflow-hidden bg-gray-100 ${gridView === 'single' ? 'h-48' : 'h-24'} relative`}>
-                        <img 
-                          src={recipe.image} 
-                          alt={recipe.name}
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            e.target.style.display = 'none';
-                          }}
-                        />
-                        {!recipe.tested && (
-                          <div className="absolute top-2 left-2 bg-yellow-500 text-white px-2 py-1 rounded-lg text-xs font-bold shadow-lg">
-                            À tester
-                          </div>
-                        )}
-                      </div>
-                    )}
-                    <div className={gridView === 'single' ? 'p-6' : 'p-3'}>
-                      {!recipe.image && !recipe.tested && (
-                        <div className="mb-2">
-                          <span className="inline-block bg-yellow-500 text-white px-2 py-1 rounded-lg text-xs font-bold">
-                            À tester
-                          </span>
-                        </div>
-                      )}
-                      
-                      {/* Badge Team */}
-                      {recipe.teamId && TEAMS[recipe.teamId] && (
-                        <div className="mb-2">
-                          <span 
-                            className="inline-block text-white px-3 py-1 rounded-full text-xs font-bold"
-                            style={{ backgroundColor: TEAMS[recipe.teamId].color }}
-                          >
-                            {TEAMS[recipe.teamId].name}
-                          </span>
-                        </div>
-                      )}
-                      
-                      <h3 className={`font-bold text-gray-800 mb-2 ${gridView === 'single' ? 'text-xl' : 'text-sm'}`}>{recipe.name}</h3>
-                      
-                      {recipe.servings && (
-                        <p className={`text-gray-500 mb-2 ${gridView === 'single' ? 'text-xs' : 'text-xs'}`}>
-                          👥 {recipe.servings}p
-                        </p>
-                      )}
 
-                      {recipe.types && recipe.types.length > 0 && (
-                        <div className="mb-2 flex flex-wrap gap-1">
-                          {recipe.types.slice(0, gridView === 'single' ? 3 : 2).map((type, idx) => (
-                            <span key={idx} className={`inline-block px-2 py-1 rounded-full font-semibold bg-green-100 text-green-700 ${gridView === 'single' ? 'text-xs' : 'text-xs'}`}>
-                              {type}
-                            </span>
-                          ))}
-                          {recipe.types.length > (gridView === 'single' ? 3 : 2) && (
-                            <span className="inline-block px-2 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">
-                              +{recipe.types.length - (gridView === 'single' ? 3 : 2)}
-                            </span>
-                          )}
-                        </div>
-                      )}
-                      
-                      {gridView === 'single' && recipe.ingredients && recipe.ingredients.length > 0 && (
-                        <div className="mb-3">
-                          <p className="text-sm font-semibold text-orange-700 mb-2">Ingrédients:</p>
-                          <div className="flex flex-wrap gap-2">
-                            {recipe.ingredients.slice(0, 3).map((ing, idx) => (
-                              <span key={idx} className="text-xs bg-orange-50 px-3 py-1 rounded-full text-gray-700">
-                                {ing}
-                              </span>
-                            ))}
-                            {recipe.ingredients.length > 3 && (
-                              <span className="text-xs bg-orange-50 px-3 py-1 rounded-full text-gray-500">
-                                +{recipe.ingredients.length - 3}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                      
-                      {recipe.createdBy && gridView === 'single' && (
-                        <p className="text-xs text-gray-400 mt-3">
-                          Par {recipe.createdBy}
-                        </p>
+                    {/* Bannière photo */}
+                    <div
+                      className="flex-none w-[72px] sm:w-[88px] flex items-center justify-center overflow-hidden"
+                      style={{ backgroundColor: recipe.image ? C.linen : '#EDF1E4', borderRight: `1px solid ${C.line}` }}
+                    >
+                      {recipe.image ? (
+                        <img
+                          src={recipe.image}
+                          alt=""
+                          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                          onError={(e) => { e.target.style.display = 'none'; }}
+                        />
+                      ) : (
+                        <Leaf className="w-5 h-5 opacity-40" style={{ color: C.stem }} />
                       )}
                     </div>
+
+                    <div className="flex-1 min-w-0 px-3 py-2.5 sm:px-4 sm:py-3 flex flex-col justify-center">
+                      {recipe.teamId && TEAMS[recipe.teamId] && (
+                        <p className="text-[9px] sm:text-[10px] uppercase tracking-[0.14em] font-semibold mb-0.5 truncate"
+                           style={{ color: teamColor }}>
+                          {TEAMS[recipe.teamId].name}
+                        </p>
+                      )}
+                      <h3 className="text-[14px] sm:text-[17px] leading-snug mb-1 truncate"
+                          style={{ color: C.ink, fontFamily: "'Fraunces', Georgia, serif", fontWeight: 600 }}>
+                        {recipe.name}
+                      </h3>
+                      <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] sm:text-xs"
+                           style={{ color: C.sage }}>
+                        {recipe.servings && <span>👥 {recipe.servings}</span>}
+                        {recipe.types && recipe.types.slice(0, 2).map((type, idx) => (
+                          <React.Fragment key={idx}>
+                            <span style={{ color: C.line }}>—</span>
+                            <span>{type}</span>
+                          </React.Fragment>
+                        ))}
+                        {recipe.ingredients && recipe.ingredients.length > 0 && (
+                          <>
+                            <span style={{ color: C.line }} className="hidden sm:inline">—</span>
+                            <span className="hidden sm:inline">{recipe.ingredients.length} ingrédients</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    {!recipe.tested && (
+                      <>
+                        <span className="hidden sm:inline-flex absolute top-1/2 right-3 -translate-y-1/2 items-center gap-1 px-2 py-1 rounded-full text-[9.5px] font-bold uppercase tracking-wider"
+                              style={{ backgroundColor: C.sprout, color: C.ink }}>
+                          <Sprout className="w-3 h-3" /> À tester
+                        </span>
+                        <span className="sm:hidden absolute top-2 right-2 w-2 h-2 rounded-full ring-2 ring-white"
+                              style={{ backgroundColor: C.sprout }} title="À tester" />
+                      </>
+                    )}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
         </div>
+
+        {/* Modal d'import hybride */}
+        {showImportModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-6">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="p-8">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-3xl font-bold text-gray-800">✨ Importer une recette</h2>
+                  <button
+                    onClick={() => {
+                      setShowImportModal(false);
+                      setImportMethod(null);
+                      setImportText('');
+                      setImportImage(null);
+                      setImportVideo(null);
+                    }}
+                    className="text-gray-600 hover:text-gray-800 text-2xl"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                {!importMethod ? (
+                  <div className="space-y-4">
+                    <p className="text-gray-600 mb-6">Choisissez votre méthode d'import :</p>
+
+                    {/* Option 1 : Image */}
+                    <button
+                      onClick={() => setImportMethod('image')}
+                      className="w-full p-6 border-2 border-gray-200 rounded-xl hover:border-orange-500 hover:bg-orange-50 transition-all text-left"
+                    >
+                      <div className="flex items-start gap-4">
+                        <div className="text-4xl">📸</div>
+                        <div className="flex-1">
+                          <h3 className="text-xl font-bold text-gray-800 mb-2">Capture d'écran</h3>
+                          <p className="text-sm text-gray-600">
+                            Parfait pour les vidéos Instagram/TikTok avec texte affiché.
+                            L'IA va lire l'image et extraire la recette.
+                          </p>
+                          <p className="text-xs text-orange-600 mt-2 font-semibold">⚡ Rapide (~5 sec) • 💰 ~0.01€</p>
+                        </div>
+                      </div>
+                    </button>
+
+                    {/* Option 2 : Texte */}
+                    <button
+                      onClick={() => setImportMethod('text')}
+                      className="w-full p-6 border-2 border-gray-200 rounded-xl hover:border-green-500 hover:bg-green-50 transition-all text-left"
+                    >
+                      <div className="flex items-start gap-4">
+                        <div className="text-4xl">📋</div>
+                        <div className="flex-1">
+                          <h3 className="text-xl font-bold text-gray-800 mb-2">Copier-coller</h3>
+                          <p className="text-sm text-gray-600">
+                            Copiez la description Instagram/TikTok ou le texte de n'importe quel site.
+                            Parsing automatique instantané.
+                          </p>
+                          <p className="text-xs text-green-600 mt-2 font-semibold">⚡ Instantané • ✅ Gratuit</p>
+                        </div>
+                      </div>
+                    </button>
+
+                    {/* Option 3 : Vidéo */}
+                    <button
+                      onClick={() => setImportMethod('video')}
+                      className="w-full p-6 border-2 border-gray-200 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition-all text-left"
+                    >
+                      <div className="flex items-start gap-4">
+                        <div className="text-4xl">📹</div>
+                        <div className="flex-1">
+                          <h3 className="text-xl font-bold text-gray-800 mb-2">Vidéo complète</h3>
+                          <p className="text-sm text-gray-600">
+                            Upload une vidéo téléchargée depuis Instagram.
+                            Transcription audio + analyse complète.
+                          </p>
+                          <p className="text-xs text-blue-600 mt-2 font-semibold">⏱️ ~30 sec • 💰 ~0.05€</p>
+                        </div>
+                      </div>
+                    </button>
+
+                    {/* Option 4 : Manuel */}
+                    <button
+                      onClick={() => {
+                        setShowImportModal(false);
+                        setCurrentView('add');
+                      }}
+                      className="w-full p-6 border-2 border-gray-200 rounded-xl hover:border-purple-500 hover:bg-purple-50 transition-all text-left"
+                    >
+                      <div className="flex items-start gap-4">
+                        <div className="text-4xl">✍️</div>
+                        <div className="flex-1">
+                          <h3 className="text-xl font-bold text-gray-800 mb-2">Saisie manuelle</h3>
+                          <p className="text-sm text-gray-600">
+                            Remplir le formulaire classique vous-même.
+                          </p>
+                          <p className="text-xs text-purple-600 mt-2 font-semibold">✅ Gratuit</p>
+                        </div>
+                      </div>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    <button
+                      onClick={() => {
+                        setImportMethod(null);
+                        setImportText('');
+                        setImportImage(null);
+                        setImportVideo(null);
+                      }}
+                      className="text-gray-600 hover:text-gray-800 text-sm font-semibold"
+                    >
+                      ← Retour aux options
+                    </button>
+
+                    {/* Formulaire selon la méthode */}
+                    {importMethod === 'image' && (
+                      <div>
+                        <h3 className="text-xl font-bold text-gray-800 mb-4">📸 Import par image</h3>
+                        <p className="text-sm text-gray-600 mb-4">
+                          Uploadez une capture d'écran de la recette. L'IA va analyser l'image et extraire automatiquement les informations.
+                        </p>
+                        
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              const reader = new FileReader();
+                              reader.onloadend = () => {
+                                setImportImage(reader.result);
+                              };
+                              reader.readAsDataURL(file);
+                            }
+                          }}
+                          className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-orange-500 focus:outline-none bg-white file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100"
+                        />
+
+                        {importImage && (
+                          <div className="mt-4">
+                            <img src={importImage} alt="Preview" className="w-full h-64 object-cover rounded-xl border-2 border-gray-200" />
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {importMethod === 'text' && (
+                      <div>
+                        <h3 className="text-xl font-bold text-gray-800 mb-4">📋 Import par texte</h3>
+                        <p className="text-sm text-gray-600 mb-4">
+                          Collez la description Instagram, le texte d'un site web, ou n'importe quel texte contenant la recette.
+                        </p>
+                        
+                        <textarea
+                          value={importText}
+                          onChange={(e) => setImportText(e.target.value)}
+                          placeholder="Collez le texte de la recette ici...
+
+Exemple:
+Tarte aux pommes 🍎
+Pour 6 personnes
+
+Ingrédients:
+- 200g de farine
+- 3 œufs
+- 100ml de lait
+
+Préparation:
+Mélangez la farine et les œufs..."
+                          rows="15"
+                          className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-green-500 focus:outline-none resize-none"
+                        />
+                      </div>
+                    )}
+
+                    {importMethod === 'video' && (
+                      <div>
+                        <h3 className="text-xl font-bold text-gray-800 mb-4">📹 Import par vidéo</h3>
+                        <p className="text-sm text-gray-600 mb-4">
+                          Uploadez une vidéo téléchargée depuis Instagram. L'IA va transcrire l'audio.
+                        </p>
+                        
+                        <div className="bg-yellow-50 border-2 border-yellow-200 rounded-xl p-4 mb-4">
+                          <p className="text-sm text-yellow-800">
+                            ⚠️ <strong>Note :</strong> Vous devez d'abord télécharger la vidéo Instagram avec une app tierce (SnapInsta, SaveFrom, etc.)
+                          </p>
+                        </div>
+
+                        <input
+                          type="file"
+                          accept="video/*"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              if (file.size > 50 * 1024 * 1024) {
+                                alert('Vidéo trop volumineuse (max 50 MB)');
+                                return;
+                              }
+                              setImportVideo(file);
+                            }
+                          }}
+                          className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none bg-white file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 mb-4"
+                        />
+
+                        <p className="text-sm text-gray-600 mb-2">Et collez aussi la description Instagram :</p>
+                        <textarea
+                          value={importText}
+                          onChange={(e) => setImportText(e.target.value)}
+                          placeholder="Collez la description Instagram ici (où sont listés les ingrédients)..."
+                          rows="6"
+                          className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none resize-none"
+                        />
+                      </div>
+                    )}
+
+                    {/* Bouton d'analyse */}
+                    <button
+                      onClick={handleImport}
+                      disabled={isAnalyzing || 
+                        (importMethod === 'image' && !importImage) ||
+                        (importMethod === 'text' && !importText.trim()) ||
+                        (importMethod === 'video' && !importVideo)
+                      }
+                      className={`w-full py-4 rounded-xl font-bold text-white transition-all ${
+                        isAnalyzing || 
+                        (importMethod === 'image' && !importImage) ||
+                        (importMethod === 'text' && !importText.trim()) ||
+                        (importMethod === 'video' && !importVideo)
+                          ? 'bg-gray-300 cursor-not-allowed'
+                          : 'bg-orange-600 hover:bg-orange-700 shadow-lg'
+                      }`}
+                    >
+                      {isAnalyzing ? (
+                        <span>🤖 Analyse en cours...</span>
+                      ) : (
+                        <span>🤖 Analyser et importer</span>
+                      )}
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
 
   if (currentView === 'view' && viewingRecipe) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-orange-50 to-red-50">
-        <div className="max-w-4xl mx-auto p-6">
-          <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
+      <div className="min-h-screen" style={{ backgroundColor: C.linen }}>
+        <div className="max-w-4xl mx-auto p-4 sm:p-6">
+          <div className="bg-white rounded-2xl overflow-hidden" style={{ border: `1px solid ${C.line}`, boxShadow: '0 12px 32px -18px rgba(16,36,26,.35)' }}>
             {viewingRecipe.image && (
-              <div className="h-96 overflow-hidden bg-gray-100">
+              <div className="h-64 sm:h-96 overflow-hidden" style={{ backgroundColor: C.linen }}>
                 <img 
                   src={viewingRecipe.image} 
                   alt={viewingRecipe.name}
@@ -1252,81 +1342,88 @@ export default function RecipeManager() {
               </div>
             )}
             
-            <div className="p-8">
-              <div className="flex items-center justify-between mb-6">
-                <h1 className="text-4xl font-bold text-gray-800">{viewingRecipe.name}</h1>
+            <div className="p-6 sm:p-10">
+              <div className="flex items-start justify-between gap-4 mb-4">
+                <div className="min-w-0">
+                  {viewingRecipe.teamId && TEAMS[viewingRecipe.teamId] && (
+                    <p className="text-[11px] uppercase tracking-[0.16em] font-semibold mb-2"
+                       style={{ color: TEAMS[viewingRecipe.teamId].color }}>
+                      {TEAMS[viewingRecipe.teamId].name}
+                    </p>
+                  )}
+                  <h1 className="text-3xl sm:text-4xl leading-tight"
+                      style={{ color: C.ink, fontFamily: "'Fraunces', Georgia, serif", fontWeight: 600 }}>
+                    {viewingRecipe.name}
+                  </h1>
+                </div>
                 <button
                   onClick={() => {
                     setViewingRecipe(null);
                     setCurrentView('home');
                   }}
-                  className="text-gray-600 hover:text-gray-800 px-4 py-2 rounded-lg hover:bg-gray-100"
+                  className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center transition-colors"
+                  style={{ color: C.sage, border: `1px solid ${C.line}` }}
+                  aria-label="Fermer la recette"
                 >
                   ✕
                 </button>
               </div>
 
-              <div className="flex flex-wrap gap-3 mb-6">
-                {!viewingRecipe.tested && (
-                  <div className="bg-yellow-500 text-white px-4 py-2 rounded-xl font-bold shadow-lg">
-                    À tester
-                  </div>
-                )}
-                
-                {/* Badge Team */}
-                {viewingRecipe.teamId && TEAMS[viewingRecipe.teamId] && (
-                  <div 
-                    className="text-white px-4 py-2 rounded-xl font-bold shadow-lg"
-                    style={{ backgroundColor: TEAMS[viewingRecipe.teamId].color }}
-                  >
-                    {TEAMS[viewingRecipe.teamId].name}
-                  </div>
-                )}
-                
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2 mb-8 pb-6 text-sm"
+                   style={{ color: C.sage, borderBottom: `1px solid ${C.line}` }}>
                 {viewingRecipe.servings && (
-                  <div className="flex items-center gap-2 bg-blue-50 px-4 py-2 rounded-xl">
-                    <span className="text-blue-700 font-semibold">👥 {viewingRecipe.servings} personne{viewingRecipe.servings > 1 ? 's' : ''}</span>
-                  </div>
-                )}
-                {viewingRecipe.types && viewingRecipe.types.length > 0 && viewingRecipe.types.map((type, idx) => (
-                  <span key={idx} className="inline-block px-4 py-2 rounded-xl text-sm font-semibold bg-green-100 text-green-700">
-                    {type}
+                  <span className="inline-flex items-center gap-1.5">
+                    <Users className="w-4 h-4" />
+                    {viewingRecipe.servings} personne{viewingRecipe.servings > 1 ? 's' : ''}
                   </span>
+                )}
+                {viewingRecipe.types && viewingRecipe.types.map((type, idx) => (
+                  <React.Fragment key={idx}>
+                    <span style={{ color: C.line }}>—</span>
+                    <span>{type}</span>
+                  </React.Fragment>
                 ))}
+                {!viewingRecipe.tested && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider"
+                        style={{ backgroundColor: C.sprout, color: C.ink }}>
+                    <Sprout className="w-3 h-3" /> À tester
+                  </span>
+                )}
               </div>
 
-              {viewingRecipe.ingredients && viewingRecipe.ingredients.length > 0 && (
-                <div className="mb-8">
-                  <h2 className="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-                    🥘 Ingrédients
-                  </h2>
-                  <div className="bg-orange-50 rounded-xl p-6">
-                    <ul className="space-y-2">
+              <div className="grid md:grid-cols-[minmax(0,1fr)_1.4fr] gap-8 mb-8">
+                {viewingRecipe.ingredients && viewingRecipe.ingredients.length > 0 && (
+                  <div>
+                    <h2 className="text-[11px] uppercase tracking-[0.18em] font-semibold mb-4" style={{ color: C.sage }}>
+                      Ingrédients
+                    </h2>
+                    <ul className="space-y-2.5">
                       {viewingRecipe.ingredients.map((ing, idx) => (
-                        <li key={idx} className="flex items-start gap-3">
-                          <span className="text-orange-600 font-bold">•</span>
-                          <span className="text-gray-700">{ing}</span>
+                        <li key={idx} className="flex items-start gap-2.5 pb-2.5"
+                            style={{ borderBottom: idx < viewingRecipe.ingredients.length - 1 ? `1px solid ${C.line}` : 'none' }}>
+                          <Leaf className="w-3.5 h-3.5 mt-1 shrink-0" style={{ color: C.stem }} />
+                          <span style={{ color: C.ink }}>{ing}</span>
                         </li>
                       ))}
                     </ul>
                   </div>
-                </div>
-              )}
+                )}
 
-              {viewingRecipe.steps && (
-                <div className="mb-8">
-                  <h2 className="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-                    👨‍🍳 Préparation
-                  </h2>
-                  <div className="bg-gray-50 rounded-xl p-6">
-                    <p className="text-gray-700 whitespace-pre-line leading-relaxed">{viewingRecipe.steps}</p>
+                {viewingRecipe.steps && (
+                  <div>
+                    <h2 className="text-[11px] uppercase tracking-[0.18em] font-semibold mb-4" style={{ color: C.sage }}>
+                      Préparation
+                    </h2>
+                    <p className="whitespace-pre-line leading-[1.75] text-[15px]" style={{ color: C.ink }}>
+                      {viewingRecipe.steps}
+                    </p>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
 
               {viewingRecipe.createdBy && (
-                <p className="text-sm text-gray-500 mb-6">
-                  Créée par {viewingRecipe.createdBy}
+                <p className="text-xs mb-6 pt-4" style={{ color: C.sage, borderTop: `1px solid ${C.line}` }}>
+                  Ajoutée par {viewingRecipe.createdBy}
                 </p>
               )}
 
@@ -1345,7 +1442,8 @@ export default function RecipeManager() {
                         setSyncStatus('error');
                       }
                     }}
-                    className="w-full flex items-center justify-center gap-2 bg-green-600 text-white px-6 py-3 rounded-xl hover:bg-green-700 transition-colors shadow-lg font-semibold"
+                    className="w-full flex items-center justify-center gap-2 text-white px-6 py-3 rounded-xl transition-opacity hover:opacity-90 font-semibold"
+                    style={{ backgroundColor: C.stem }}
                   >
                     ✓ Marquer comme testée et validée
                   </button>
@@ -1591,7 +1689,8 @@ export default function RecipeManager() {
                 </div>
               ) : (
                 Object.entries(TEAMS).map(([teamId, team]) => {
-                  const teamUsers = Object.entries(allUsers).filter(([, userData]) => {
+                  const teamUsers = Object.entries(allUsers).filter(([userKey, userData]) => {
+                    // userKey est déjà formaté avec underscores depuis Firebase
                     return userData && userData.teamId === teamId;
                   });
                   
