@@ -1100,17 +1100,17 @@ export default function RecipeManager() {
                       )}
                     </div>
 
-                    <div className="flex-1 min-w-0 px-4 py-3.5 sm:px-5 sm:py-4 flex flex-col justify-center">
+                    <div className={`flex-1 min-w-0 px-4 py-3.5 sm:px-5 sm:py-4 flex flex-col justify-center ${!recipe.tested ? 'pr-8 sm:pr-32' : ''}`}>
+                      <h3 className="text-[17px] sm:text-[21px] leading-snug mb-1"
+                          style={{ color: C.ink, fontFamily: "'Fraunces', Georgia, serif", fontWeight: 600 }}>
+                        {recipe.name}
+                      </h3>
                       {recipe.teamId && TEAMS[recipe.teamId] && (
-                        <p className="text-[10px] sm:text-[11px] uppercase tracking-[0.14em] font-semibold mb-1 truncate"
+                        <p className="text-[10px] sm:text-[11px] uppercase tracking-[0.14em] font-semibold mb-1.5 truncate"
                            style={{ color: teamColor }}>
                           {TEAMS[recipe.teamId].name}
                         </p>
                       )}
-                      <h3 className="text-[17px] sm:text-[21px] leading-snug mb-1.5"
-                          style={{ color: C.ink, fontFamily: "'Fraunces', Georgia, serif", fontWeight: 600 }}>
-                        {recipe.name}
-                      </h3>
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[12px] sm:text-[13px]"
                            style={{ color: C.sage }}>
                         {recipe.servings && <span>👥 {recipe.servings}</span>}
@@ -1415,16 +1415,16 @@ Mélangez la farine et les œufs..."
             <div className="p-6 sm:p-10">
               <div className="flex items-start justify-between gap-4 mb-4">
                 <div className="min-w-0">
-                  {viewingRecipe.teamId && TEAMS[viewingRecipe.teamId] && (
-                    <p className="text-[11px] uppercase tracking-[0.16em] font-semibold mb-2"
-                       style={{ color: TEAMS[viewingRecipe.teamId].color }}>
-                      {TEAMS[viewingRecipe.teamId].name}
-                    </p>
-                  )}
                   <h1 className="text-3xl sm:text-4xl leading-tight"
                       style={{ color: C.ink, fontFamily: "'Fraunces', Georgia, serif", fontWeight: 600 }}>
                     {viewingRecipe.name}
                   </h1>
+                  {viewingRecipe.teamId && TEAMS[viewingRecipe.teamId] && (
+                    <p className="text-[11px] uppercase tracking-[0.16em] font-semibold mt-2"
+                       style={{ color: TEAMS[viewingRecipe.teamId].color }}>
+                      {TEAMS[viewingRecipe.teamId].name}
+                    </p>
+                  )}
                 </div>
                 <button
                   onClick={() => {
