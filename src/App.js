@@ -1055,7 +1055,7 @@ export default function RecipeManager() {
                   <div
                     key={recipe.id}
                     onClick={() => !shoppingMode && viewRecipe(recipe)}
-                    className={`group relative flex items-stretch bg-white rounded-lg overflow-hidden transition-all ${
+                    className={`group relative flex items-stretch bg-white rounded-lg overflow-hidden transition-all h-[116px] sm:h-[136px] ${
                       shoppingMode ? 'cursor-default' : 'cursor-pointer'
                     }`}
                     style={{
@@ -1082,14 +1082,15 @@ export default function RecipeManager() {
 
                     {/* Bannière photo */}
                     <div
-                      className="flex-none w-[104px] sm:w-[128px] flex items-center justify-center overflow-hidden"
+                      className="flex-none w-[116px] sm:w-[136px] flex items-center justify-center overflow-hidden"
                       style={{ backgroundColor: recipe.image ? C.linen : '#EDF1E4', borderRight: `1px solid ${C.line}` }}
                     >
                       {recipe.image ? (
                         <img
                           src={recipe.image}
                           alt=""
-                          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                          className="w-full h-full transition-transform duration-500 group-hover:scale-105"
+                          style={{ objectFit: 'cover', objectPosition: 'center' }}
                           onError={(e) => { e.target.style.display = 'none'; }}
                         />
                       ) : (
@@ -1099,7 +1100,15 @@ export default function RecipeManager() {
 
                     <div className={`flex-1 min-w-0 px-4 py-3.5 sm:px-5 sm:py-4 flex flex-col justify-center ${!recipe.tested ? 'pr-8 sm:pr-32' : ''}`}>
                       <h3 className="text-[17px] sm:text-[21px] leading-snug mb-1"
-                          style={{ color: C.ink, fontFamily: "'Fraunces', Georgia, serif", fontWeight: 600 }}>
+                          style={{
+                            color: C.ink,
+                            fontFamily: "'Fraunces', Georgia, serif",
+                            fontWeight: 600,
+                            display: '-webkit-box',
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: 'vertical',
+                            overflow: 'hidden'
+                          }}>
                         {recipe.name}
                       </h3>
                       {recipe.teamId && TEAMS[recipe.teamId] && (
@@ -1401,7 +1410,8 @@ Mélangez la farine et les œufs..."
                 <img 
                   src={viewingRecipe.image} 
                   alt={viewingRecipe.name}
-                  className="w-full h-full object-cover"
+                  className="w-full h-full"
+                  style={{ objectFit: 'cover', objectPosition: 'center' }}
                   onError={(e) => {
                     e.target.style.display = 'none';
                   }}
