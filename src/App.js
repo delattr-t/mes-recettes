@@ -43,6 +43,7 @@ export default function RecipeManager() {
   const knownRecipeIds = useRef(null);   // null tant que le premier chargement n'a pas eu lieu
   const currentUserEmail = useRef(null); // évite une valeur périmée dans l'écouteur Firebase
   const toastTimer = useRef(null);
+  const annoncerRef = useRef(null); // évite de relancer l'écouteur Firebase à chaque rendu
   const [syncStatus, setSyncStatus] = useState('connecting');
   const [user, setUser] = useState(null);
   const [userTeam, setUserTeam] = useState(null); // Team de l'utilisateur
@@ -156,8 +157,8 @@ export default function RecipeManager() {
             r.createdBy !== currentUserEmail.current
           );
           knownRecipeIds.current = ids;
-          if (nouvelles.length > 0) {
-            annoncerRecette(nouvelles[nouvelles.length - 1]);
+          if (nouvelles.length > 0 && annoncerRef.current) {
+            annoncerRef.current(nouvelles[nouvelles.length - 1]);
           }
         }
 
@@ -210,6 +211,9 @@ export default function RecipeManager() {
       }
     }
   };
+
+  // Garde la référence à jour sans redéclencher l'effet ci-dessus
+  annoncerRef.current = annoncerRecette;
 
   const demanderNotifications = async () => {
     if (typeof Notification === 'undefined') return;
