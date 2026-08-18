@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Search, Sprout, Leaf, Trash2, Edit2, Cloud, CloudOff, LogOut, LogIn, ShoppingCart, Users, SlidersHorizontal, Bell, X } from 'lucide-react';
+import { Plus, Search, Sprout, Leaf, Trash2, Edit2, Cloud, CloudOff, LogOut, LogIn, ShoppingCart, Users, SlidersHorizontal, Bell, X, Image as ImageIcon, Clipboard, Video, PenLine, ArrowLeft } from 'lucide-react';
 import { database, auth, googleProvider } from './firebaseConfig';
 import { ref, set, onValue, remove } from 'firebase/database';
 import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
@@ -12,6 +12,46 @@ const C = {
   linen: '#F3F5EC',    // fond
   sage: '#7B8A6F',     // texte secondaire
   line: '#DDE3D2'      // filets et bordures
+};
+
+// Méthodes d'ajout proposées dans le modal
+const METHODES = {
+  image: {
+    nom: 'Capture d\'écran',
+    court: 'L\'IA lit l\'image et en extrait la recette',
+    tag: '~5 s',
+    gratuit: false,
+    Icone: ImageIcon,
+    titre: 'Depuis une image',
+    aide: 'Déposez une capture d\'écran d\'un Reel ou d\'une page de recette. L\'IA en extrait le nom, les ingrédients et les étapes.'
+  },
+  text: {
+    nom: 'Copier-coller',
+    court: 'Depuis Instagram, un site, un message…',
+    tag: 'Gratuit',
+    gratuit: true,
+    Icone: Clipboard,
+    titre: 'Depuis un texte',
+    aide: 'Collez la description Instagram ou le texte d\'un site. Le découpage en ingrédients et étapes est automatique.'
+  },
+  video: {
+    nom: 'Vidéo',
+    court: 'Transcription de l\'audio + description',
+    tag: '~30 s',
+    gratuit: false,
+    Icone: Video,
+    titre: 'Depuis une vidéo',
+    aide: 'La bande son est transcrite pour reconstituer les étapes de préparation.'
+  },
+  manuel: {
+    nom: 'Saisie manuelle',
+    court: 'Remplir le formulaire soi-même',
+    tag: 'Gratuit',
+    gratuit: true,
+    Icone: PenLine,
+    titre: 'Saisie manuelle',
+    aide: ''
+  }
 };
 
 export default function RecipeManager() {
@@ -761,6 +801,12 @@ export default function RecipeManager() {
     };
   };
 
+  // Le bouton d'analyse reste inactif tant que la source manque
+  const importDesactive = isAnalyzing ||
+    (importMethod === 'image' && !importImage) ||
+    (importMethod === 'text' && !importText.trim()) ||
+    (importMethod === 'video' && !importVideo);
+
   // Nombre de filtres actifs (hors recherche texte)
   const activeFilterCount = (filterType ? 1 : 0) + (filterTeam ? 1 : 0);
 
@@ -1286,13 +1332,19 @@ export default function RecipeManager() {
           </div>
         </div>
 
-        {/* Modal d'import hybride */}
+        {/* Modal d'import */}
         {showImportModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-6">
-            <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-              <div className="p-8">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-3xl font-bold text-gray-800">✨ Importer une recette</h2>
+          <div className="fixed inset-0 flex items-end sm:items-center justify-center z-50 p-0 sm:p-6"
+               style={{ backgroundColor: 'rgba(16,36,26,.45)' }}>
+            <div className="bg-white w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl max-h-[88vh] overflow-y-auto"
+                 style={{ boxShadow: '0 -8px 40px -12px rgba(16,36,26,.4)' }}>
+              <div className="p-5">
+
+                <div className="flex items-center justify-between mb-1">
+                  <h2 className="text-xl leading-tight"
+                      style={{ color: C.ink, fontFamily: "'Fraunces', Georgia, serif", fontWeight: 600 }}>
+                    {importMethod ? METHODES[importMethod].titre : 'Ajouter une recette'}
+                  </h2>
                   <button
                     onClick={() => {
                       setShowImportModal(false);
@@ -1301,92 +1353,57 @@ export default function RecipeManager() {
                       setImportImage(null);
                       setImportVideo(null);
                     }}
-                    className="text-gray-600 hover:text-gray-800 text-2xl"
+                    className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 hover:bg-black/5"
+                    style={{ color: C.sage }}
+                    aria-label="Fermer"
                   >
-                    ✕
+                    <X className="w-4 h-4" />
                   </button>
                 </div>
 
                 {!importMethod ? (
-                  <div className="space-y-4">
-                    <p className="text-gray-600 mb-6">Choisissez votre méthode d'import :</p>
+                  <>
+                    <p className="text-[13px] mb-4" style={{ color: C.sage }}>
+                      Comment souhaitez-vous l&apos;ajouter&nbsp;?
+                    </p>
 
-                    {/* Option 1 : Image */}
-                    <button
-                      onClick={() => setImportMethod('image')}
-                      className="w-full p-6 border-2 border-gray-200 rounded-xl hover:border-orange-500 hover:bg-orange-50 transition-all text-left"
-                    >
-                      <div className="flex items-start gap-4">
-                        <div className="text-4xl">📸</div>
-                        <div className="flex-1">
-                          <h3 className="text-xl font-bold text-gray-800 mb-2">Capture d'écran</h3>
-                          <p className="text-sm text-gray-600">
-                            Parfait pour les vidéos Instagram/TikTok avec texte affiché.
-                            L'IA va lire l'image et extraire la recette.
-                          </p>
-                          <p className="text-xs text-orange-600 mt-2 font-semibold">⚡ Rapide (~5 sec) • 💰 ~0.01€</p>
-                        </div>
-                      </div>
-                    </button>
-
-                    {/* Option 2 : Texte */}
-                    <button
-                      onClick={() => setImportMethod('text')}
-                      className="w-full p-6 border-2 border-gray-200 rounded-xl hover:border-green-500 hover:bg-green-50 transition-all text-left"
-                    >
-                      <div className="flex items-start gap-4">
-                        <div className="text-4xl">📋</div>
-                        <div className="flex-1">
-                          <h3 className="text-xl font-bold text-gray-800 mb-2">Copier-coller</h3>
-                          <p className="text-sm text-gray-600">
-                            Copiez la description Instagram/TikTok ou le texte de n'importe quel site.
-                            Parsing automatique instantané.
-                          </p>
-                          <p className="text-xs text-green-600 mt-2 font-semibold">⚡ Instantané • ✅ Gratuit</p>
-                        </div>
-                      </div>
-                    </button>
-
-                    {/* Option 3 : Vidéo */}
-                    <button
-                      onClick={() => setImportMethod('video')}
-                      className="w-full p-6 border-2 border-gray-200 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition-all text-left"
-                    >
-                      <div className="flex items-start gap-4">
-                        <div className="text-4xl">📹</div>
-                        <div className="flex-1">
-                          <h3 className="text-xl font-bold text-gray-800 mb-2">Vidéo complète</h3>
-                          <p className="text-sm text-gray-600">
-                            Upload une vidéo téléchargée depuis Instagram.
-                            Transcription audio + analyse complète.
-                          </p>
-                          <p className="text-xs text-blue-600 mt-2 font-semibold">⏱️ ~30 sec • 💰 ~0.05€</p>
-                        </div>
-                      </div>
-                    </button>
-
-                    {/* Option 4 : Manuel */}
-                    <button
-                      onClick={() => {
-                        setShowImportModal(false);
-                        setCurrentView('add');
-                      }}
-                      className="w-full p-6 border-2 border-gray-200 rounded-xl hover:border-purple-500 hover:bg-purple-50 transition-all text-left"
-                    >
-                      <div className="flex items-start gap-4">
-                        <div className="text-4xl">✍️</div>
-                        <div className="flex-1">
-                          <h3 className="text-xl font-bold text-gray-800 mb-2">Saisie manuelle</h3>
-                          <p className="text-sm text-gray-600">
-                            Remplir le formulaire classique vous-même.
-                          </p>
-                          <p className="text-xs text-purple-600 mt-2 font-semibold">✅ Gratuit</p>
-                        </div>
-                      </div>
-                    </button>
-                  </div>
+                    <div className="flex flex-col gap-2">
+                      {Object.entries(METHODES).map(([cle, m]) => (
+                        <button
+                          key={cle}
+                          onClick={() => {
+                            if (cle === 'manuel') {
+                              setShowImportModal(false);
+                              setCurrentView('add');
+                            } else {
+                              setImportMethod(cle);
+                            }
+                          }}
+                          className="group flex items-center gap-3 p-3 rounded-xl text-left transition-all hover:bg-black/[.02]"
+                          style={{ border: `1px solid ${C.line}` }}
+                        >
+                          <div className="flex items-center justify-center w-10 h-10 rounded-lg shrink-0"
+                               style={{ backgroundColor: C.linen }}>
+                            <m.Icone className="w-[18px] h-[18px]" style={{ color: C.stem }} />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[15px] font-semibold leading-tight" style={{ color: C.ink }}>
+                              {m.nom}
+                            </p>
+                            <p className="text-[12px] leading-snug mt-0.5" style={{ color: C.sage }}>
+                              {m.court}
+                            </p>
+                          </div>
+                          <span className="text-[10px] uppercase tracking-wider font-semibold px-2 py-1 rounded-full shrink-0"
+                                style={{ backgroundColor: m.gratuit ? C.sprout : C.linen, color: m.gratuit ? C.ink : C.sage }}>
+                            {m.tag}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </>
                 ) : (
-                  <div className="space-y-6">
+                  <div>
                     <button
                       onClick={() => {
                         setImportMethod(null);
@@ -1394,134 +1411,120 @@ export default function RecipeManager() {
                         setImportImage(null);
                         setImportVideo(null);
                       }}
-                      className="text-gray-600 hover:text-gray-800 text-sm font-semibold"
+                      className="inline-flex items-center gap-1 text-[12px] font-semibold mb-4 hover:opacity-70"
+                      style={{ color: C.stem }}
                     >
-                      ← Retour aux options
+                      <ArrowLeft className="w-3.5 h-3.5" /> Retour
                     </button>
 
-                    {/* Formulaire selon la méthode */}
+                    <p className="text-[13px] mb-3 leading-relaxed" style={{ color: C.sage }}>
+                      {METHODES[importMethod].aide}
+                    </p>
+
                     {importMethod === 'image' && (
-                      <div>
-                        <h3 className="text-xl font-bold text-gray-800 mb-4">📸 Import par image</h3>
-                        <p className="text-sm text-gray-600 mb-4">
-                          Uploadez une capture d'écran de la recette. L'IA va analyser l'image et extraire automatiquement les informations.
-                        </p>
-                        
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) {
-                              const reader = new FileReader();
-                              reader.onloadend = () => {
-                                setImportImage(reader.result);
-                              };
-                              reader.readAsDataURL(file);
-                            }
-                          }}
-                          className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-orange-500 focus:outline-none bg-white file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100"
-                        />
+                      <>
+                        <label className="flex flex-col items-center justify-center gap-2 py-8 rounded-xl cursor-pointer transition-colors hover:bg-black/[.02]"
+                               style={{ border: `1px dashed ${C.line}`, backgroundColor: C.linen }}>
+                          <ImageIcon className="w-6 h-6" style={{ color: C.stem }} />
+                          <span className="text-[13px] font-semibold" style={{ color: C.ink }}>
+                            Choisir une image
+                          </span>
+                          <span className="text-[11px]" style={{ color: C.sage }}>JPG, PNG ou capture d&apos;écran</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                const reader = new FileReader();
+                                reader.onloadend = () => setImportImage(reader.result);
+                                reader.readAsDataURL(file);
+                              }
+                            }}
+                          />
+                        </label>
 
                         {importImage && (
-                          <div className="mt-4">
-                            <img src={importImage} alt="Preview" className="w-full h-64 object-cover rounded-xl border-2 border-gray-200" />
+                          <div className="mt-3 rounded-xl overflow-hidden" style={{ border: `1px solid ${C.line}` }}>
+                            <img src={importImage} alt="" className="w-full h-40"
+                                 style={{ objectFit: 'cover', objectPosition: 'center' }} />
                           </div>
                         )}
-                      </div>
+                      </>
                     )}
 
                     {importMethod === 'text' && (
-                      <div>
-                        <h3 className="text-xl font-bold text-gray-800 mb-4">📋 Import par texte</h3>
-                        <p className="text-sm text-gray-600 mb-4">
-                          Collez la description Instagram, le texte d'un site web, ou n'importe quel texte contenant la recette.
-                        </p>
-                        
-                        <textarea
-                          value={importText}
-                          onChange={(e) => setImportText(e.target.value)}
-                          placeholder="Collez le texte de la recette ici...
-
-Exemple:
-Tarte aux pommes 🍎
-Pour 6 personnes
-
-Ingrédients:
-- 200g de farine
-- 3 œufs
-- 100ml de lait
-
-Préparation:
-Mélangez la farine et les œufs..."
-                          rows="15"
-                          className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-green-500 focus:outline-none resize-none"
-                        />
-                      </div>
+                      <textarea
+                        value={importText}
+                        onChange={(e) => setImportText(e.target.value)}
+                        placeholder={"Collez ici le texte de la recette…\n\nDahl de lentilles corail\nPour 4 personnes\n\nIngrédients\n- 200 g de lentilles corail\n- 400 ml de lait de coco\n\nPréparation\nÉmincez les oignons…"}
+                        rows="9"
+                        className="w-full px-3.5 py-3 rounded-xl outline-none resize-none text-[14px] leading-relaxed"
+                        style={{ backgroundColor: C.linen, border: `1px solid ${C.line}`, color: C.ink }}
+                        onFocus={(e) => { e.target.style.borderColor = C.stem; }}
+                        onBlur={(e) => { e.target.style.borderColor = C.line; }}
+                      />
                     )}
 
                     {importMethod === 'video' && (
-                      <div>
-                        <h3 className="text-xl font-bold text-gray-800 mb-4">📹 Import par vidéo</h3>
-                        <p className="text-sm text-gray-600 mb-4">
-                          Uploadez une vidéo téléchargée depuis Instagram. L'IA va transcrire l'audio.
-                        </p>
-                        
-                        <div className="bg-yellow-50 border-2 border-yellow-200 rounded-xl p-4 mb-4">
-                          <p className="text-sm text-yellow-800">
-                            ⚠️ <strong>Note :</strong> Vous devez d'abord télécharger la vidéo Instagram avec une app tierce (SnapInsta, SaveFrom, etc.)
+                      <>
+                        <div className="flex gap-2.5 p-3 rounded-xl mb-3"
+                             style={{ backgroundColor: C.linen, border: `1px solid ${C.line}` }}>
+                          <Sprout className="w-4 h-4 shrink-0 mt-0.5" style={{ color: C.stem }} />
+                          <p className="text-[12px] leading-snug" style={{ color: C.sage }}>
+                            Téléchargez d&apos;abord la vidéo avec une app tierce (SnapInsta, SaveFrom…), puis déposez-la ici.
                           </p>
                         </div>
 
-                        <input
-                          type="file"
-                          accept="video/*"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) {
-                              if (file.size > 50 * 1024 * 1024) {
-                                alert('Vidéo trop volumineuse (max 50 MB)');
-                                return;
+                        <label className="flex flex-col items-center justify-center gap-2 py-6 rounded-xl cursor-pointer transition-colors hover:bg-black/[.02] mb-3"
+                               style={{ border: `1px dashed ${C.line}`, backgroundColor: C.linen }}>
+                          <Video className="w-6 h-6" style={{ color: C.stem }} />
+                          <span className="text-[13px] font-semibold" style={{ color: C.ink }}>
+                            {importVideo ? importVideo.name : 'Choisir une vidéo'}
+                          </span>
+                          <span className="text-[11px]" style={{ color: C.sage }}>50 Mo maximum</span>
+                          <input
+                            type="file"
+                            accept="video/*"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                if (file.size > 50 * 1024 * 1024) {
+                                  alert('Vidéo trop volumineuse (50 Mo maximum)');
+                                  return;
+                                }
+                                setImportVideo(file);
                               }
-                              setImportVideo(file);
-                            }
-                          }}
-                          className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none bg-white file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 mb-4"
-                        />
+                            }}
+                          />
+                        </label>
 
-                        <p className="text-sm text-gray-600 mb-2">Et collez aussi la description Instagram :</p>
                         <textarea
                           value={importText}
                           onChange={(e) => setImportText(e.target.value)}
-                          placeholder="Collez la description Instagram ici (où sont listés les ingrédients)..."
-                          rows="6"
-                          className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none resize-none"
+                          placeholder="Collez aussi la description, c'est là que sont listés les ingrédients…"
+                          rows="4"
+                          className="w-full px-3.5 py-3 rounded-xl outline-none resize-none text-[14px] leading-relaxed"
+                          style={{ backgroundColor: C.linen, border: `1px solid ${C.line}`, color: C.ink }}
+                          onFocus={(e) => { e.target.style.borderColor = C.stem; }}
+                          onBlur={(e) => { e.target.style.borderColor = C.line; }}
                         />
-                      </div>
+                      </>
                     )}
 
-                    {/* Bouton d'analyse */}
                     <button
                       onClick={handleImport}
-                      disabled={isAnalyzing || 
-                        (importMethod === 'image' && !importImage) ||
-                        (importMethod === 'text' && !importText.trim()) ||
-                        (importMethod === 'video' && !importVideo)
-                      }
-                      className={`w-full py-4 rounded-xl font-bold text-white transition-all ${
-                        isAnalyzing || 
-                        (importMethod === 'image' && !importImage) ||
-                        (importMethod === 'text' && !importText.trim()) ||
-                        (importMethod === 'video' && !importVideo)
-                          ? 'bg-gray-300 cursor-not-allowed'
-                          : 'bg-orange-600 hover:bg-orange-700 shadow-lg'
-                      }`}
+                      disabled={importDesactive}
+                      className="w-full mt-4 py-3.5 rounded-xl font-semibold text-[15px] text-white transition-opacity"
+                      style={{
+                        backgroundColor: importDesactive ? C.line : C.stem,
+                        color: importDesactive ? C.sage : '#fff',
+                        cursor: importDesactive ? 'not-allowed' : 'pointer'
+                      }}
                     >
-                      {isAnalyzing ? (
-                        <span>🤖 Analyse en cours...</span>
-                      ) : (
-                        <span>🤖 Analyser et importer</span>
-                      )}
+                      {isAnalyzing ? 'Analyse en cours…' : 'Analyser et importer'}
                     </button>
                   </div>
                 )}
