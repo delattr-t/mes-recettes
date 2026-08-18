@@ -898,7 +898,6 @@ export default function RecipeManager() {
             <div className="mb-6">
               <div className="flex items-center gap-3 pb-5 mb-5" style={{ borderBottom: `1px solid ${C.line}` }}>
                 <div className="min-w-0 flex-1">
-                  <p className="text-[11px] uppercase tracking-[0.18em] font-semibold" style={{ color: C.sage }}>Cuisine végétarienne</p>
                   <h1 className="text-2xl sm:text-3xl leading-tight" style={{ color: C.ink, fontFamily: "'Fraunces', Georgia, serif", fontWeight: 600 }}>Recettes de famille</h1>
                   <SyncIndicator />
                 </div>
