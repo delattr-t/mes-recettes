@@ -83,6 +83,7 @@ export default function RecipeManager() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState('');
   const [filterTeam, setFilterTeam] = useState(''); // Nouveau filtre team
+  const [filterVege, setFilterVege] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
 
   // Notifications de nouvelles recettes
@@ -114,6 +115,7 @@ export default function RecipeManager() {
     steps: '',
     image: '',
     images: [],
+    vegetarien: false,
     tested: false
   });
 
@@ -383,6 +385,7 @@ export default function RecipeManager() {
       images: newRecipe.images || [],
       // Conservé pour les recettes déjà en base et l'aperçu en liste
       image: (newRecipe.images && newRecipe.images[0]) || '',
+      vegetarien: newRecipe.vegetarien || false,
       tested: newRecipe.tested || false,
       teamId: userTeam, // Ajouter automatiquement le teamId de l'utilisateur
       createdAt: editingRecipe?.createdAt || new Date().toISOString(),
@@ -436,6 +439,7 @@ export default function RecipeManager() {
       steps: recipe.steps,
       image: recipe.image || '',
       images: photosDe(recipe),
+      vegetarien: recipe.vegetarien || false,
       tested: recipe.tested || false
     });
     setViewingRecipe(null);
@@ -449,7 +453,7 @@ export default function RecipeManager() {
   };
 
   const resetForm = () => {
-    setNewRecipe({ name: '', servings: '', types: [], ingredients: '', steps: '', image: '', images: [], tested: false });
+    setNewRecipe({ name: '', servings: '', types: [], ingredients: '', steps: '', image: '', images: [], vegetarien: false, tested: false });
     setEditingRecipe(null);
     setHeroIndex(0);
   };
@@ -871,7 +875,7 @@ export default function RecipeManager() {
     (importMethod === 'video' && !importVideo);
 
   // Nombre de filtres actifs (hors recherche texte)
-  const activeFilterCount = (filterType ? 1 : 0) + (filterTeam ? 1 : 0);
+  const activeFilterCount = (filterType ? 1 : 0) + (filterTeam ? 1 : 0) + (filterVege ? 1 : 0);
 
   // Prénom affiché dans l'en-tête
   const firstName = user
@@ -896,7 +900,12 @@ export default function RecipeManager() {
     if (filterTeam && recipe.teamId !== filterTeam) {
       return false;
     }
-    
+
+    // Filtre végétarien
+    if (filterVege && !recipe.vegetarien) {
+      return false;
+    }
+
     return true;
   });
 
@@ -1173,6 +1182,36 @@ export default function RecipeManager() {
               {/* Panneau de filtres rétractable */}
               {showFilters && (
                 <div className="space-y-4 p-4 rounded-xl" style={{ backgroundColor: C.linen, border: `1px solid ${C.line}` }}>
+                  {/* Régime */}
+                  <div>
+                    <p className="text-[10px] uppercase tracking-[0.16em] font-semibold mb-2" style={{ color: C.sage }}>Régime</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      <button
+                        onClick={() => setFilterVege(false)}
+                        className="px-3 py-1.5 rounded-full text-[13px] font-medium transition-all"
+                        style={{
+                          backgroundColor: !filterVege ? C.ink : '#fff',
+                          color: !filterVege ? '#fff' : C.sage,
+                          border: `1px solid ${!filterVege ? C.ink : C.line}`
+                        }}
+                      >
+                        Tout
+                      </button>
+                      <button
+                        onClick={() => setFilterVege(true)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-medium transition-all"
+                        style={{
+                          backgroundColor: filterVege ? C.stem : '#fff',
+                          color: filterVege ? '#fff' : C.sage,
+                          border: `1px solid ${filterVege ? C.stem : C.line}`
+                        }}
+                      >
+                        <Leaf className="w-3.5 h-3.5" />
+                        Végétarien
+                      </button>
+                    </div>
+                  </div>
+
                   {/* Types : pastilles */}
                   <div>
                     <p className="text-[10px] uppercase tracking-[0.16em] font-semibold mb-2" style={{ color: C.sage }}>Type</p>
@@ -1239,6 +1278,12 @@ export default function RecipeManager() {
               {/* Rappel discret quand le panneau est replié */}
               {!showFilters && activeFilterCount > 0 && (
                 <div className="flex flex-wrap items-center gap-1.5">
+                  {filterVege && (
+                    <span className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[12px] font-medium text-white"
+                          style={{ backgroundColor: C.stem }}>
+                      <Leaf className="w-3 h-3" /> Végétarien
+                    </span>
+                  )}
                   {filterType && (
                     <span className="px-2.5 py-1 rounded-full text-[12px] font-medium"
                           style={{ backgroundColor: C.linen, color: C.ink, border: `1px solid ${C.line}` }}>
@@ -1257,14 +1302,15 @@ export default function RecipeManager() {
               <div className="flex items-center justify-between gap-3 pt-1 text-xs" style={{ color: C.sage }}>
                 <span>
                   {filteredRecipes.length} recette{filteredRecipes.length > 1 ? 's' : ''}
-                  {(searchQuery || filterType || filterTeam) ? ' trouvée' + (filteredRecipes.length > 1 ? 's' : '') : ''}
+                  {(searchQuery || filterType || filterTeam || filterVege) ? ' trouvée' + (filteredRecipes.length > 1 ? 's' : '') : ''}
                 </span>
-                {(searchQuery || filterType || filterTeam) && (
+                {(searchQuery || filterType || filterTeam || filterVege) && (
                   <button
                     onClick={() => {
                       setSearchQuery('');
                       setFilterType('');
                       setFilterTeam('');
+                      setFilterVege(false);
                     }}
                     className="font-semibold underline underline-offset-2 hover:opacity-70"
                     style={{ color: C.stem }}
@@ -1279,10 +1325,10 @@ export default function RecipeManager() {
               <div className="text-center py-20">
                 <Sprout className="w-14 h-14 mx-auto mb-4" style={{ color: C.line }} />
                 <p className="text-lg" style={{ color: C.ink, fontFamily: "'Fraunces', Georgia, serif" }}>
-                  {searchQuery || filterType || filterTeam ? 'Rien ne pousse ici' : 'Aucune recette pour l\'instant'}
+                  {searchQuery || filterType || filterTeam || filterVege ? 'Rien ne pousse ici' : 'Aucune recette pour l\'instant'}
                 </p>
                 <p className="text-sm mt-1" style={{ color: C.sage }}>
-                  {searchQuery || filterType || filterTeam
+                  {searchQuery || filterType || filterTeam || filterVege
                     ? 'Essayez avec moins de filtres.'
                     : 'Ajoutez la première recette avec le bouton +.'}
                 </p>
@@ -1344,6 +1390,15 @@ export default function RecipeManager() {
                         </>
                       ) : (
                         <Leaf className="w-7 h-7 opacity-40" style={{ color: C.stem }} />
+                      )}
+
+                      {/* Gommette végé */}
+                      {recipe.vegetarien && (
+                        <span className="absolute top-1.5 left-1.5 w-6 h-6 rounded-full flex items-center justify-center ring-2 ring-white"
+                              style={{ backgroundColor: C.stem }}
+                              title="Recette végétarienne">
+                          <Leaf className="w-3.5 h-3.5" style={{ color: '#fff' }} />
+                        </span>
                       )}
                     </div>
 
@@ -1718,6 +1773,12 @@ export default function RecipeManager() {
                     <span>{type}</span>
                   </React.Fragment>
                 ))}
+                {viewingRecipe.vegetarien && (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider text-white"
+                        style={{ backgroundColor: C.stem }}>
+                    <Leaf className="w-3 h-3" /> Végétarien
+                  </span>
+                )}
                 {!viewingRecipe.tested && (
                   <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider"
                         style={{ backgroundColor: C.sprout, color: C.ink }}>
@@ -2243,17 +2304,40 @@ export default function RecipeManager() {
             />
           </div>
 
-          <div className="mb-6">
-            <label className="flex items-center gap-3 p-4 border-2 border-gray-200 rounded-xl cursor-pointer hover:border-orange-300 transition-colors">
+          <div className="mb-6 space-y-2.5">
+            <label className="flex items-center gap-3 p-3.5 rounded-xl cursor-pointer transition-colors hover:bg-black/[.02]"
+                   style={{ border: `1px solid ${newRecipe.vegetarien ? C.stem : C.line}` }}>
+              <input
+                type="checkbox"
+                checked={newRecipe.vegetarien}
+                onChange={(e) => setNewRecipe({ ...newRecipe, vegetarien: e.target.checked })}
+                className="w-5 h-5 rounded"
+                style={{ accentColor: C.stem }}
+              />
+              <div className="flex items-center gap-2">
+                <span className="flex items-center justify-center w-6 h-6 rounded-full shrink-0"
+                      style={{ backgroundColor: newRecipe.vegetarien ? C.stem : C.linen }}>
+                  <Leaf className="w-3.5 h-3.5" style={{ color: newRecipe.vegetarien ? '#fff' : C.sage }} />
+                </span>
+                <div>
+                  <span className="font-semibold text-[15px]" style={{ color: C.ink }}>Recette végétarienne</span>
+                  <p className="text-xs mt-0.5" style={{ color: C.sage }}>Ni viande ni poisson</p>
+                </div>
+              </div>
+            </label>
+
+            <label className="flex items-center gap-3 p-3.5 rounded-xl cursor-pointer transition-colors hover:bg-black/[.02]"
+                   style={{ border: `1px solid ${newRecipe.tested ? C.stem : C.line}` }}>
               <input
                 type="checkbox"
                 checked={newRecipe.tested}
                 onChange={(e) => setNewRecipe({ ...newRecipe, tested: e.target.checked })}
-                className="w-5 h-5 text-green-600 border-2 border-gray-300 rounded focus:ring-green-500"
+                className="w-5 h-5 rounded"
+                style={{ accentColor: C.stem }}
               />
               <div>
-                <span className="font-semibold text-gray-800">✓ Recette testée et validée</span>
-                <p className="text-xs text-gray-500 mt-1">Cochez si vous avez déjà préparé cette recette</p>
+                <span className="font-semibold text-[15px]" style={{ color: C.ink }}>Recette testée et validée</span>
+                <p className="text-xs mt-0.5" style={{ color: C.sage }}>Décochée, elle apparaîtra comme « à tester »</p>
               </div>
             </label>
           </div>
