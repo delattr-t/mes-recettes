@@ -18,12 +18,12 @@ const C = {
 const METHODES = {
   image: {
     nom: 'Capture d\'écran',
-    court: 'L\'IA lit l\'image et en extrait la recette',
-    tag: '~5 s',
+    court: 'Jusqu\'à 3 images, lues ensemble',
+    tag: '~8 s',
     gratuit: false,
     Icone: ImageIcon,
-    titre: 'Depuis une image',
-    aide: 'Déposez une capture d\'écran d\'un Reel ou d\'une page de recette. L\'IA en extrait le nom, les ingrédients et les étapes.'
+    titre: 'Depuis des images',
+    aide: 'Déposez jusqu\'à trois captures. Si les ingrédients sont sur l\'une et les étapes sur une autre, tout est recoupé en une seule recette.'
   },
   text: {
     nom: 'Copier-coller',
@@ -36,12 +36,12 @@ const METHODES = {
   },
   video: {
     nom: 'Vidéo',
-    court: 'Transcription de l\'audio + description',
-    tag: '~30 s',
+    court: 'Lit le texte affiché dans un Reel',
+    tag: '~20 s',
     gratuit: false,
     Icone: Video,
     titre: 'Depuis une vidéo',
-    aide: 'La bande son est transcrite pour reconstituer les étapes de préparation.'
+    aide: 'Sept images sont extraites de la vidéo pour lire le texte incrusté à l\'écran. La vidéo ne quitte pas votre appareil, seules les images sont analysées.'
   },
   manuel: {
     nom: 'Saisie manuelle',
@@ -53,6 +53,16 @@ const METHODES = {
     aide: ''
   }
 };
+
+// Les anciennes recettes n'ont qu'un champ `image` ; les nouvelles ont `images`.
+// Cette fonction renvoie toujours un tableau, quel que soit le format en base.
+const photosDe = (recipe) => {
+  if (!recipe) return [];
+  if (Array.isArray(recipe.images) && recipe.images.length > 0) return recipe.images;
+  return recipe.image ? [recipe.image] : [];
+};
+
+const MAX_PHOTOS = 3;
 
 export default function RecipeManager() {
   // Configuration des teams
@@ -103,15 +113,18 @@ export default function RecipeManager() {
     ingredients: '',
     steps: '',
     image: '',
+    images: [],
     tested: false
   });
 
   // États pour l'import hybride
   const [showImportModal, setShowImportModal] = useState(false);
+  const [framesExtraites, setFramesExtraites] = useState(0);
+  const [heroIndex, setHeroIndex] = useState(0);
   const [importMethod, setImportMethod] = useState(null); // 'image', 'text', 'video', 'manual'
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [importText, setImportText] = useState('');
-  const [importImage, setImportImage] = useState(null);
+  const [importImages, setImportImages] = useState([]);
   const [importVideo, setImportVideo] = useState(null);
 
   useEffect(() => {
@@ -367,7 +380,9 @@ export default function RecipeManager() {
       types: newRecipe.types,
       ingredients: newRecipe.ingredients.split('\n').filter(i => i.trim()),
       steps: newRecipe.steps,
-      image: newRecipe.image,
+      images: newRecipe.images || [],
+      // Conservé pour les recettes déjà en base et l'aperçu en liste
+      image: (newRecipe.images && newRecipe.images[0]) || '',
       tested: newRecipe.tested || false,
       teamId: userTeam, // Ajouter automatiquement le teamId de l'utilisateur
       createdAt: editingRecipe?.createdAt || new Date().toISOString(),
@@ -420,6 +435,7 @@ export default function RecipeManager() {
       ingredients: recipe.ingredients.join('\n'),
       steps: recipe.steps,
       image: recipe.image || '',
+      images: photosDe(recipe),
       tested: recipe.tested || false
     });
     setViewingRecipe(null);
@@ -428,12 +444,14 @@ export default function RecipeManager() {
 
   const viewRecipe = (recipe) => {
     setViewingRecipe(recipe);
+    setHeroIndex(0);
     setCurrentView('view');
   };
 
   const resetForm = () => {
-    setNewRecipe({ name: '', servings: '', types: [], ingredients: '', steps: '', image: '', tested: false });
+    setNewRecipe({ name: '', servings: '', types: [], ingredients: '', steps: '', image: '', images: [], tested: false });
     setEditingRecipe(null);
+    setHeroIndex(0);
   };
 
   const toggleType = (type) => {
@@ -527,19 +545,23 @@ export default function RecipeManager() {
     setShoppingMode(false);
   };
 
-  // Analyse d'une image via la fonction serverless /api/analyze
+  // Analyse d'une ou plusieurs captures via la fonction serverless /api/analyze
   // (la clé API reste côté serveur, jamais dans le navigateur)
-  const analyzeImage = async (imageDataUrl) => {
-    // Une capture d'écran est souvent en PNG : il faut annoncer le bon type,
-    // sinon l'API rejette l'image.
-    const correspondance = imageDataUrl.match(/^data:(image\/[a-zA-Z+]+);base64,/);
-    const mediaType = correspondance ? correspondance[1] : 'image/jpeg';
-    const imageBase64 = imageDataUrl.split(',')[1];
+  const analyzeImage = async (listeDataUrl) => {
+    const images = listeDataUrl.map((dataUrl) => {
+      // Une capture d'écran est souvent en PNG : il faut annoncer le bon type,
+      // sinon l'API rejette l'image.
+      const correspondance = dataUrl.match(/^data:(image\/[a-zA-Z+]+);base64,/);
+      return {
+        data: dataUrl.split(',')[1],
+        mediaType: correspondance ? correspondance[1] : 'image/jpeg'
+      };
+    });
 
     const reponse = await fetch('/api/analyze', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ imageBase64, mediaType })
+      body: JSON.stringify({ images })
     });
 
     const donnees = await reponse.json();
@@ -602,17 +624,84 @@ export default function RecipeManager() {
     return result;
   };
 
-  // Fonction pour analyser une vidéo (nécessite API Claude avec vidéo)
+  // Extrait des arrêts sur image répartis sur toute la durée de la vidéo.
+  // Tout se passe dans le navigateur : la vidéo elle-même n'est jamais envoyée.
+  const extraireImages = (videoFile, nombre = 7) => {
+    return new Promise((resolve, reject) => {
+      const video = document.createElement('video');
+      const url = URL.createObjectURL(videoFile);
+      const images = [];
+      let index = 0;
+      let instants = [];
+
+      const nettoyer = () => URL.revokeObjectURL(url);
+
+      video.preload = 'metadata';
+      video.muted = true;
+      video.playsInline = true;
+      video.src = url;
+
+      video.onloadedmetadata = () => {
+        const duree = video.duration;
+        if (!duree || !isFinite(duree)) {
+          nettoyer();
+          reject(new Error("La durée de la vidéo n'a pas pu être lue."));
+          return;
+        }
+        // On évite les toutes premières et dernières fractions de seconde,
+        // souvent noires ou floues.
+        instants = Array.from({ length: nombre }, (_, i) =>
+          (duree * (i + 0.5)) / nombre
+        );
+        video.currentTime = instants[0];
+      };
+
+      video.onseeked = () => {
+        const canvas = document.createElement('canvas');
+        // 720 px de large suffisent largement pour lire du texte incrusté
+        const largeur = Math.min(video.videoWidth, 720);
+        const ratio = largeur / video.videoWidth;
+        canvas.width = largeur;
+        canvas.height = Math.round(video.videoHeight * ratio);
+
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        images.push(canvas.toDataURL('image/jpeg', 0.7).split(',')[1]);
+
+        index += 1;
+        setFramesExtraites(index);
+
+        if (index < instants.length) {
+          video.currentTime = instants[index];
+        } else {
+          nettoyer();
+          resolve(images);
+        }
+      };
+
+      video.onerror = () => {
+        nettoyer();
+        reject(new Error("Ce format de vidéo n'a pas pu être lu par le navigateur."));
+      };
+    });
+  };
+
+  // Analyse d'un Reel : images extraites + description collée
   const analyzeVideo = async (videoFile, descriptionText) => {
-    try {
-      // Note: Cette fonctionnalité nécessiterait l'upload de la vidéo vers un service
-      // Pour l'instant, on va juste parser la description fournie
-      alert('⚠️ Analyse vidéo : Pour l\'instant, veuillez coller la description de la vidéo dans le champ texte.');
-      return analyzeText(descriptionText);
-    } catch (error) {
-      console.error('Erreur analyse vidéo:', error);
-      throw error;
+    setFramesExtraites(0);
+    const frames = await extraireImages(videoFile);
+
+    const reponse = await fetch('/api/analyze-video', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ frames, description: descriptionText || '' })
+    });
+
+    const donnees = await reponse.json();
+    if (!reponse.ok) {
+      throw new Error(donnees.error || "L'analyse de la vidéo a échoué.");
     }
+    return donnees;
   };
 
   // Fonction pour gérer l'import selon la méthode choisie
@@ -622,8 +711,8 @@ export default function RecipeManager() {
     try {
       let result = null;
 
-      if (importMethod === 'image' && importImage) {
-        result = await analyzeImage(importImage);
+      if (importMethod === 'image' && importImages.length > 0) {
+        result = await analyzeImage(importImages);
       } else if (importMethod === 'text' && importText) {
         result = analyzeText(importText);
       } else if (importMethod === 'video' && importVideo) {
@@ -643,7 +732,7 @@ export default function RecipeManager() {
           ? result.ingredients.join('\n') 
           : result.ingredients || newRecipe.ingredients,
         steps: result.steps || newRecipe.steps,
-        image: importMethod === 'image' ? importImage : newRecipe.image
+        images: importMethod === 'image' ? importImages : (newRecipe.images || [])
       });
 
       // Fermer le modal et aller au formulaire
@@ -777,7 +866,7 @@ export default function RecipeManager() {
 
   // Le bouton d'analyse reste inactif tant que la source manque
   const importDesactive = isAnalyzing ||
-    (importMethod === 'image' && !importImage) ||
+    (importMethod === 'image' && importImages.length === 0) ||
     (importMethod === 'text' && !importText.trim()) ||
     (importMethod === 'video' && !importVideo);
 
@@ -1234,17 +1323,25 @@ export default function RecipeManager() {
 
                     {/* Bannière photo */}
                     <div
-                      className="flex-none w-[116px] sm:w-[136px] flex items-center justify-center overflow-hidden"
-                      style={{ backgroundColor: recipe.image ? C.linen : '#EDF1E4', borderRight: `1px solid ${C.line}` }}
+                      className="relative flex-none w-[116px] sm:w-[136px] flex items-center justify-center overflow-hidden"
+                      style={{ backgroundColor: photosDe(recipe).length ? C.linen : '#EDF1E4', borderRight: `1px solid ${C.line}` }}
                     >
-                      {recipe.image ? (
-                        <img
-                          src={recipe.image}
-                          alt=""
-                          className="w-full h-full transition-transform duration-500 group-hover:scale-105"
-                          style={{ objectFit: 'cover', objectPosition: 'center' }}
-                          onError={(e) => { e.target.style.display = 'none'; }}
-                        />
+                      {photosDe(recipe).length > 0 ? (
+                        <>
+                          <img
+                            src={photosDe(recipe)[0]}
+                            alt=""
+                            className="w-full h-full transition-transform duration-500 group-hover:scale-105"
+                            style={{ objectFit: 'cover', objectPosition: 'center' }}
+                            onError={(e) => { e.target.style.display = 'none'; }}
+                          />
+                          {photosDe(recipe).length > 1 && (
+                            <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold"
+                                  style={{ backgroundColor: 'rgba(16,36,26,.7)', color: '#fff' }}>
+                              {photosDe(recipe).length}
+                            </span>
+                          )}
+                        </>
                       ) : (
                         <Leaf className="w-7 h-7 opacity-40" style={{ color: C.stem }} />
                       )}
@@ -1323,7 +1420,7 @@ export default function RecipeManager() {
                       setShowImportModal(false);
                       setImportMethod(null);
                       setImportText('');
-                      setImportImage(null);
+                      setImportImages([]);
                       setImportVideo(null);
                     }}
                     className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 hover:bg-black/5"
@@ -1381,7 +1478,7 @@ export default function RecipeManager() {
                       onClick={() => {
                         setImportMethod(null);
                         setImportText('');
-                        setImportImage(null);
+                        setImportImages([]);
                         setImportVideo(null);
                       }}
                       className="inline-flex items-center gap-1 text-[12px] font-semibold mb-4 hover:opacity-70"
@@ -1396,33 +1493,58 @@ export default function RecipeManager() {
 
                     {importMethod === 'image' && (
                       <>
-                        <label className="flex flex-col items-center justify-center gap-2 py-8 rounded-xl cursor-pointer transition-colors hover:bg-black/[.02]"
-                               style={{ border: `1px dashed ${C.line}`, backgroundColor: C.linen }}>
-                          <ImageIcon className="w-6 h-6" style={{ color: C.stem }} />
-                          <span className="text-[13px] font-semibold" style={{ color: C.ink }}>
-                            Choisir une image
-                          </span>
-                          <span className="text-[11px]" style={{ color: C.sage }}>JPG, PNG ou capture d&apos;écran</span>
-                          <input
-                            type="file"
-                            accept="image/*"
-                            className="hidden"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0];
-                              if (file) {
-                                const reader = new FileReader();
-                                reader.onloadend = () => setImportImage(reader.result);
-                                reader.readAsDataURL(file);
-                              }
-                            }}
-                          />
-                        </label>
-
-                        {importImage && (
-                          <div className="mt-3 rounded-xl overflow-hidden" style={{ border: `1px solid ${C.line}` }}>
-                            <img src={importImage} alt="" className="w-full h-40"
-                                 style={{ objectFit: 'cover', objectPosition: 'center' }} />
+                        {importImages.length > 0 && (
+                          <div className="flex flex-wrap gap-2 mb-3">
+                            {importImages.map((img, idx) => (
+                              <div key={idx} className="relative w-[88px] h-[88px] rounded-lg overflow-hidden"
+                                   style={{ border: `1px solid ${C.line}` }}>
+                                <img src={img} alt="" className="w-full h-full"
+                                     style={{ objectFit: 'cover', objectPosition: 'center' }} />
+                                <button
+                                  type="button"
+                                  onClick={() => setImportImages(importImages.filter((_, i) => i !== idx))}
+                                  className="absolute top-1 right-1 w-5 h-5 rounded-full flex items-center justify-center"
+                                  style={{ backgroundColor: 'rgba(16,36,26,.65)', color: '#fff' }}
+                                  aria-label="Retirer"
+                                >
+                                  <X className="w-3 h-3" />
+                                </button>
+                              </div>
+                            ))}
                           </div>
+                        )}
+
+                        {importImages.length < MAX_PHOTOS && (
+                          <label className="flex flex-col items-center justify-center gap-2 py-7 rounded-xl cursor-pointer transition-colors hover:bg-black/[.02]"
+                                 style={{ border: `1px dashed ${C.line}`, backgroundColor: C.linen }}>
+                            <ImageIcon className="w-6 h-6" style={{ color: C.stem }} />
+                            <span className="text-[13px] font-semibold" style={{ color: C.ink }}>
+                              {importImages.length === 0 ? 'Choisir une ou plusieurs images' : 'Ajouter une image'}
+                            </span>
+                            <span className="text-[11px]" style={{ color: C.sage }}>
+                              {importImages.length}/{MAX_PHOTOS} — ingrédients et étapes peuvent être sur des captures différentes
+                            </span>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              multiple
+                              className="hidden"
+                              onChange={(e) => {
+                                const fichiers = Array.from(e.target.files || []);
+                                const place = MAX_PHOTOS - importImages.length;
+                                Promise.all(
+                                  fichiers.slice(0, place).map(f => new Promise((resolve) => {
+                                    const reader = new FileReader();
+                                    reader.onloadend = () => resolve(reader.result);
+                                    reader.readAsDataURL(f);
+                                  }))
+                                ).then(nouvelles => {
+                                  setImportImages(prev => [...prev, ...nouvelles]);
+                                });
+                                e.target.value = '';
+                              }}
+                            />
+                          </label>
                         )}
                       </>
                     )}
@@ -1477,8 +1599,8 @@ export default function RecipeManager() {
                         <textarea
                           value={importText}
                           onChange={(e) => setImportText(e.target.value)}
-                          placeholder="Collez aussi la description, c'est là que sont listés les ingrédients…"
-                          rows="4"
+                          placeholder="Facultatif : collez la description sous la vidéo, elle complète ce qui est lu à l'écran…"
+                          rows="3"
                           className="w-full px-3.5 py-3 rounded-xl outline-none resize-none text-[14px] leading-relaxed"
                           style={{ backgroundColor: C.linen, border: `1px solid ${C.line}`, color: C.ink }}
                           onFocus={(e) => { e.target.style.borderColor = C.stem; }}
@@ -1497,7 +1619,11 @@ export default function RecipeManager() {
                         cursor: importDesactive ? 'not-allowed' : 'pointer'
                       }}
                     >
-                      {isAnalyzing ? 'Analyse en cours…' : 'Analyser et importer'}
+                      {isAnalyzing
+                        ? (importMethod === 'video' && framesExtraites > 0 && framesExtraites < 7
+                            ? `Lecture de la vidéo… ${framesExtraites}/7`
+                            : 'Analyse en cours…')
+                        : 'Analyser et importer'}
                     </button>
                   </div>
                 )}
@@ -1514,19 +1640,42 @@ export default function RecipeManager() {
       <div className="min-h-screen" style={{ backgroundColor: C.linen }}>
         <div className="max-w-4xl mx-auto p-4 sm:p-6">
           <div className="bg-white rounded-2xl overflow-hidden" style={{ border: `1px solid ${C.line}`, boxShadow: '0 12px 32px -18px rgba(16,36,26,.35)' }}>
-            {viewingRecipe.image && (
-              <div className="h-64 sm:h-96 overflow-hidden" style={{ backgroundColor: C.linen }}>
-                <img 
-                  src={viewingRecipe.image} 
-                  alt={viewingRecipe.name}
-                  className="w-full h-full"
-                  style={{ objectFit: 'cover', objectPosition: 'center' }}
-                  onError={(e) => {
-                    e.target.style.display = 'none';
-                  }}
-                />
-              </div>
-            )}
+            {photosDe(viewingRecipe).length > 0 && (() => {
+              const photos = photosDe(viewingRecipe);
+              const courante = Math.min(heroIndex, photos.length - 1);
+              return (
+                <div>
+                  <div className="h-64 sm:h-96 overflow-hidden" style={{ backgroundColor: C.linen }}>
+                    <img
+                      src={photos[courante]}
+                      alt={viewingRecipe.name}
+                      className="w-full h-full"
+                      style={{ objectFit: 'cover', objectPosition: 'center' }}
+                      onError={(e) => { e.target.style.display = 'none'; }}
+                    />
+                  </div>
+                  {photos.length > 1 && (
+                    <div className="flex gap-2 px-4 sm:px-6 py-3" style={{ backgroundColor: C.linen, borderBottom: `1px solid ${C.line}` }}>
+                      {photos.map((photo, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => setHeroIndex(idx)}
+                          className="w-16 h-16 rounded-lg overflow-hidden transition-all shrink-0"
+                          style={{
+                            border: `2px solid ${idx === courante ? C.stem : 'transparent'}`,
+                            opacity: idx === courante ? 1 : 0.65
+                          }}
+                          aria-label={`Photo ${idx + 1}`}
+                        >
+                          <img src={photo} alt="" className="w-full h-full"
+                               style={{ objectFit: 'cover', objectPosition: 'center' }} />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
             
             <div className="p-6 sm:p-10">
               <div className="flex items-start justify-between gap-4 mb-4">
@@ -1974,61 +2123,78 @@ export default function RecipeManager() {
           </div>
 
           <div className="mb-6">
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Photo de la recette
+            <label className="block text-sm font-semibold mb-2" style={{ color: C.ink }}>
+              Photos <span className="font-normal" style={{ color: C.sage }}>— jusqu&apos;à {MAX_PHOTOS}</span>
             </label>
-            
-            <div className="space-y-3">
-              {/* Upload depuis la galerie */}
-              <div>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={async (e) => {
-                    const file = e.target.files?.[0];
-                    if (file) {
-                      try {
-                        const compressedImage = await compressImage(file);
-                        setNewRecipe({ ...newRecipe, image: compressedImage });
-                      } catch (error) {
-                        console.error('Erreur compression:', error);
-                        alert('Erreur lors du traitement de l\'image');
-                      }
-                    }
-                  }}
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-orange-500 focus:outline-none bg-white file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100"
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  📸 L'image sera automatiquement redimensionnée et compressée
-                </p>
-              </div>
-            </div>
-            
-            {/* Aperçu de l'image */}
-            {newRecipe.image && (
-              <div className="mt-3">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-semibold text-gray-700">Aperçu :</span>
+
+            <div className="flex flex-wrap gap-2.5">
+              {(newRecipe.images || []).map((photo, idx) => (
+                <div key={idx} className="relative w-[104px] h-[104px] rounded-xl overflow-hidden"
+                     style={{ border: `1px solid ${C.line}` }}>
+                  <img src={photo} alt="" className="w-full h-full"
+                       style={{ objectFit: 'cover', objectPosition: 'center' }} />
+                  {idx === 0 && (
+                    <span className="absolute bottom-0 inset-x-0 text-[9px] uppercase tracking-wider font-bold text-center py-0.5"
+                          style={{ backgroundColor: C.sprout, color: C.ink }}>
+                      Couverture
+                    </span>
+                  )}
                   <button
                     type="button"
-                    onClick={() => setNewRecipe({ ...newRecipe, image: '' })}
-                    className="text-xs text-red-600 hover:text-red-700 font-semibold"
+                    onClick={() => {
+                      const restantes = newRecipe.images.filter((_, i) => i !== idx);
+                      setNewRecipe({ ...newRecipe, images: restantes });
+                    }}
+                    className="absolute top-1 right-1 w-6 h-6 rounded-full flex items-center justify-center"
+                    style={{ backgroundColor: 'rgba(16,36,26,.65)', color: '#fff' }}
+                    aria-label="Retirer cette photo"
                   >
-                    ✕ Supprimer l'image
+                    <X className="w-3.5 h-3.5" />
                   </button>
                 </div>
-                <div className="rounded-xl overflow-hidden border-2 border-gray-200">
-                  <img 
-                    src={newRecipe.image} 
-                    alt="Aperçu" 
-                    className="w-full h-64 object-cover"
-                    onError={(e) => {
-                      e.target.style.display = 'none';
+              ))}
+
+              {(newRecipe.images || []).length < MAX_PHOTOS && (
+                <label className="w-[104px] h-[104px] rounded-xl flex flex-col items-center justify-center gap-1 cursor-pointer transition-colors hover:bg-black/[.02]"
+                       style={{ border: `1px dashed ${C.line}`, backgroundColor: C.linen }}>
+                  <Plus className="w-5 h-5" style={{ color: C.stem }} />
+                  <span className="text-[11px] font-semibold" style={{ color: C.sage }}>Ajouter</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    onChange={async (e) => {
+                      const fichiers = Array.from(e.target.files || []);
+                      if (fichiers.length === 0) return;
+                      const dejaLa = (newRecipe.images || []).length;
+                      const place = MAX_PHOTOS - dejaLa;
+                      if (fichiers.length > place) {
+                        alert(`Seules les ${place} première${place > 1 ? 's' : ''} photo${place > 1 ? 's' : ''} ${place > 1 ? 'seront ajoutées' : 'sera ajoutée'} : la limite est de ${MAX_PHOTOS}.`);
+                      }
+                      try {
+                        const compressees = [];
+                        for (const f of fichiers.slice(0, place)) {
+                          compressees.push(await compressImage(f));
+                        }
+                        setNewRecipe(prev => ({
+                          ...prev,
+                          images: [...(prev.images || []), ...compressees]
+                        }));
+                      } catch (error) {
+                        console.error('Erreur compression:', error);
+                        alert("Une des images n'a pas pu être traitée.");
+                      }
+                      e.target.value = '';
                     }}
                   />
-                </div>
-              </div>
-            )}
+                </label>
+              )}
+            </div>
+
+            <p className="text-[11px] mt-2" style={{ color: C.sage }}>
+              La première photo sert de couverture dans la liste. Les images sont redimensionnées automatiquement.
+            </p>
           </div>
 
           <div className="mb-6">
