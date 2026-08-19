@@ -527,55 +527,26 @@ export default function RecipeManager() {
     setShoppingMode(false);
   };
 
-  // Fonction pour analyser une image avec l'IA Claude
-  const analyzeImage = async (imageBase64) => {
-    try {
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 2000,
-          messages: [
-            {
-              role: "user",
-              content: [
-                {
-                  type: "image",
-                  source: {
-                    type: "base64",
-                    media_type: "image/jpeg",
-                    data: imageBase64.split(',')[1]
-                  }
-                },
-                {
-                  type: "text",
-                  text: `Analyse cette image de recette et extrait les informations suivantes en JSON :
-                  {
-                    "name": "nom de la recette",
-                    "servings": "nombre de personnes (juste le chiffre)",
-                    "ingredients": ["liste", "des", "ingrédients"],
-                    "steps": "étapes de préparation complètes"
-                  }
-                  
-                  Si certaines informations ne sont pas visibles, mets des chaînes vides ou tableaux vides.
-                  Réponds UNIQUEMENT avec le JSON, sans texte avant ou après.`
-                }
-              ]
-            }
-          ]
-        })
-      });
+  // Analyse d'une image via la fonction serverless /api/analyze
+  // (la clé API reste côté serveur, jamais dans le navigateur)
+  const analyzeImage = async (imageDataUrl) => {
+    // Une capture d'écran est souvent en PNG : il faut annoncer le bon type,
+    // sinon l'API rejette l'image.
+    const correspondance = imageDataUrl.match(/^data:(image\/[a-zA-Z+]+);base64,/);
+    const mediaType = correspondance ? correspondance[1] : 'image/jpeg';
+    const imageBase64 = imageDataUrl.split(',')[1];
 
-      const data = await response.json();
-      const jsonText = data.content[0].text.replace(/```json\n?|```/g, '').trim();
-      return JSON.parse(jsonText);
-    } catch (error) {
-      console.error('Erreur analyse image:', error);
-      throw error;
+    const reponse = await fetch('/api/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ imageBase64, mediaType })
+    });
+
+    const donnees = await reponse.json();
+    if (!reponse.ok) {
+      throw new Error(donnees.error || "L'analyse de l'image a échoué.");
     }
+    return donnees;
   };
 
   // Fonction pour analyser du texte (copier-coller)
@@ -682,7 +653,10 @@ export default function RecipeManager() {
       alert('✅ Analyse terminée ! Vérifiez et complétez les informations.');
     } catch (error) {
       console.error('Erreur import:', error);
-      alert('❌ Erreur lors de l\'analyse. Veuillez réessayer ou utiliser la saisie manuelle.');
+      alert(
+        (error.message || "L'analyse a échoué.") +
+        '\n\nVous pouvez réessayer, ou passer par la saisie manuelle.'
+      );
     } finally {
       setIsAnalyzing(false);
     }
