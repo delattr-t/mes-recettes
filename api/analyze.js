@@ -13,13 +13,25 @@ export default async function handler(req, res) {
     });
   }
 
-  const { imageBase64, mediaType } = req.body || {};
-  if (!imageBase64) {
-    return res.status(400).json({ error: 'Image manquante' });
+  // Accepte soit une image seule (ancien format), soit un tableau `images`
+  const corps = req.body || {};
+  const images = Array.isArray(corps.images) && corps.images.length > 0
+    ? corps.images
+    : (corps.imageBase64 ? [{ data: corps.imageBase64, mediaType: corps.mediaType }] : []);
+
+  if (images.length === 0) {
+    return res.status(400).json({ error: 'Aucune image reçue' });
   }
 
-  const consigne = `Cette image est une recette de cuisine (capture d'écran, photo de livre, page web…).
-Extrais son contenu et réponds UNIQUEMENT avec cet objet JSON, sans texte avant ni après,
+  const plusieurs = images.length > 1;
+
+  const consigne = `${plusieurs
+    ? `Ces ${images.length} images montrent une même recette de cuisine, dans l'ordre.
+Elles se complètent : les ingrédients peuvent être sur l'une, les étapes sur une autre.
+Fusionne les informations et ne liste jamais deux fois le même ingrédient.`
+    : `Cette image est une recette de cuisine (capture d'écran, photo de livre, page web…).`}
+
+Extrais le contenu et réponds UNIQUEMENT avec cet objet JSON, sans texte avant ni après,
 sans balises Markdown :
 
 {
@@ -47,14 +59,17 @@ N'invente aucun ingrédient et aucune étape.`;
           {
             role: 'user',
             content: [
-              {
-                type: 'image',
-                source: {
-                  type: 'base64',
-                  media_type: mediaType || 'image/jpeg',
-                  data: imageBase64
+              ...images.slice(0, 3).flatMap((img, i) => ([
+                ...(plusieurs ? [{ type: 'text', text: `— Image ${i + 1} —` }] : []),
+                {
+                  type: 'image',
+                  source: {
+                    type: 'base64',
+                    media_type: img.mediaType || 'image/jpeg',
+                    data: img.data
+                  }
                 }
-              },
+              ])),
               { type: 'text', text: consigne }
             ]
           }
