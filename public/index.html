@@ -24,6 +24,15 @@
   
   <title>Mes Recettes - Famille</title>
 </head>
+  <script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('/service-worker.js')
+        .then(function (r) { console.log('SW OK', r.scope); })
+        .catch(function (e) { console.log('SW erreur', e); });
+    });
+  }
+</script>
 <body>
   <noscript>Vous devez activer JavaScript pour utiliser cette application.</noscript>
   <div id="root"></div>
