@@ -1,13 +1,15 @@
 {
   "name": "Recettes de famille",
-  "short_name": "RecettesdeFamille",
-  "description": "Recettes partagées en famille",
+  "short_name": "Recettes",
+  "description": "Les recettes partagées de la famille",
+  "id": "/",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#FFF7ED",
-  "theme_color": "#EA580C",
+  "background_color": "#F3F5EC",
+  "theme_color": "#2F6B45",
   "orientation": "portrait-primary",
- "icons": [
+  "icons": [
     {
       "src": "/web-app-manifest-192x192.png",
       "sizes": "192x192",
@@ -19,44 +21,6 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
-    }
-  ]
-  "screenshots": [
-    {
-      "src": "/screenshot1.png",
-      "sizes": "540x720",
-      "type": "image/png",
-      "form_factor": "narrow"
-    }
-  ],
-  "categories": [
-    "food",
-    "lifestyle"
-  ],
-  "shortcuts": [
-    {
-      "name": "Ajouter une recette",
-      "short_name": "Nouvelle recette",
-      "description": "Ajouter rapidement une nouvelle recette",
-      "url": "/?action=add",
-      "icons": [
-        {
-          "src": "/icon-add.png",
-          "sizes": "96x96"
-        }
-      ]
-    },
-    {
-      "name": "Liste de courses",
-      "short_name": "Courses",
-      "description": "Créer une liste de courses",
-      "url": "/?action=shopping",
-      "icons": [
-        {
-          "src": "/icon-cart.png",
-          "sizes": "96x96"
-        }
-      ]
     }
   ]
 }
