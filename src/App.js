@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Search, Sprout, Leaf, Trash2, Edit2, Cloud, CloudOff, LogOut, LogIn, ShoppingCart, Users, SlidersHorizontal, Bell, X, Image as ImageIcon, Clipboard, Video, PenLine, ArrowLeft } from 'lucide-react';
+import { Plus, Search, Sprout, Leaf, Trash2, Edit2, Cloud, CloudOff, LogOut, LogIn, ShoppingCart, Users, SlidersHorizontal, Bell, X, Image as ImageIcon, Clipboard, Video, PenLine, ArrowLeft, Link2 } from 'lucide-react';
 import { database, auth, googleProvider } from './firebaseConfig';
 import { ref, set, onValue, remove } from 'firebase/database';
 import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
@@ -24,6 +24,15 @@ const METHODES = {
     Icone: ImageIcon,
     titre: 'Depuis des images',
     aide: 'Déposez jusqu\'à trois captures. Si les ingrédients sont sur l\'une et les étapes sur une autre, tout est recoupé en une seule recette.'
+  },
+  lien: {
+    nom: 'Lien d\'un site',
+    court: 'Blog, marmiton, site de cuisine…',
+    tag: 'Souvent gratuit',
+    gratuit: true,
+    Icone: Link2,
+    titre: 'Depuis un lien',
+    aide: 'Collez l\'adresse de la page. Beaucoup de sites publient leur recette en format lisible : dans ce cas la lecture est immédiate et sans coût.'
   },
   text: {
     nom: 'Copier-coller',
@@ -127,6 +136,7 @@ export default function RecipeManager() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [importText, setImportText] = useState('');
   const [importImages, setImportImages] = useState([]);
+  const [importUrl, setImportUrl] = useState('');
   const [importVideo, setImportVideo] = useState(null);
 
   useEffect(() => {
@@ -628,6 +638,21 @@ export default function RecipeManager() {
     return result;
   };
 
+  // Analyse d'une page de recette via la fonction serverless /api/analyze-url
+  const analyzeUrl = async (lien) => {
+    const reponse = await fetch('/api/analyze-url', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: lien.trim() })
+    });
+
+    const donnees = await reponse.json();
+    if (!reponse.ok) {
+      throw new Error(donnees.error || "La lecture de cette page a échoué.");
+    }
+    return donnees;
+  };
+
   // Extrait des arrêts sur image répartis sur toute la durée de la vidéo.
   // Tout se passe dans le navigateur : la vidéo elle-même n'est jamais envoyée.
   const extraireImages = (videoFile, nombre = 7) => {
@@ -717,6 +742,8 @@ export default function RecipeManager() {
 
       if (importMethod === 'image' && importImages.length > 0) {
         result = await analyzeImage(importImages);
+      } else if (importMethod === 'lien' && importUrl.trim()) {
+        result = await analyzeUrl(importUrl);
       } else if (importMethod === 'text' && importText) {
         result = analyzeText(importText);
       } else if (importMethod === 'video' && importVideo) {
@@ -871,6 +898,7 @@ export default function RecipeManager() {
   // Le bouton d'analyse reste inactif tant que la source manque
   const importDesactive = isAnalyzing ||
     (importMethod === 'image' && importImages.length === 0) ||
+    (importMethod === 'lien' && !importUrl.trim()) ||
     (importMethod === 'text' && !importText.trim()) ||
     (importMethod === 'video' && !importVideo);
 
@@ -1476,6 +1504,7 @@ export default function RecipeManager() {
                       setImportMethod(null);
                       setImportText('');
                       setImportImages([]);
+                      setImportUrl('');
                       setImportVideo(null);
                     }}
                     className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 hover:bg-black/5"
@@ -1534,6 +1563,8 @@ export default function RecipeManager() {
                         setImportMethod(null);
                         setImportText('');
                         setImportImages([]);
+                        setImportUrl('');
+                      setImportUrl('');
                         setImportVideo(null);
                       }}
                       className="inline-flex items-center gap-1 text-[12px] font-semibold mb-4 hover:opacity-70"
@@ -1601,6 +1632,33 @@ export default function RecipeManager() {
                             />
                           </label>
                         )}
+                      </>
+                    )}
+
+                    {importMethod === 'lien' && (
+                      <>
+                        <div className="relative">
+                          <Link2 className="absolute left-3.5 top-1/2 -translate-y-1/2 w-[18px] h-[18px]" style={{ color: C.sage }} />
+                          <input
+                            type="url"
+                            inputMode="url"
+                            value={importUrl}
+                            onChange={(e) => setImportUrl(e.target.value)}
+                            placeholder="https://…"
+                            className="w-full pl-11 pr-4 py-3 rounded-xl outline-none text-[15px]"
+                            style={{ backgroundColor: C.linen, border: `1px solid ${C.line}`, color: C.ink }}
+                            onFocus={(e) => { e.target.style.borderColor = C.stem; }}
+                            onBlur={(e) => { e.target.style.borderColor = C.line; }}
+                          />
+                        </div>
+                        <div className="flex gap-2.5 p-3 rounded-xl mt-3"
+                             style={{ backgroundColor: C.linen, border: `1px solid ${C.line}` }}>
+                          <Sprout className="w-4 h-4 shrink-0 mt-0.5" style={{ color: C.stem }} />
+                          <p className="text-[12px] leading-snug" style={{ color: C.sage }}>
+                            Si la page ne se laisse pas lire (site tout en JavaScript, accès protégé),
+                            revenez en arrière et passez par le copier-coller.
+                          </p>
+                        </div>
                       </>
                     )}
 
